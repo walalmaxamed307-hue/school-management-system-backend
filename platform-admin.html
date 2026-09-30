@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="so">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Platform Admin — Maamulka Iskuullada</title>
+<style>
+  :root {
+    --primary: #0d9488; --primary-dark: #0f766e;
+    --danger: #dc2626; --border: #e2e8f0; --canvas: #f8fafc;
+    --ink: #0f172a; --ink-muted: #64748b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: var(--canvas); color: var(--ink); margin: 0; padding: 24px;
+  }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  p.sub { color: var(--ink-muted); font-size: 13px; margin-top: 0; margin-bottom: 24px; }
+  .card {
+    background: white; border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px; margin-bottom: 20px;
+  }
+  label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 4px; margin-top: 12px; }
+  input {
+    width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px;
+    font-size: 14px; outline: none;
+  }
+  input:focus { border-color: var(--primary); }
+  button {
+    background: var(--primary); color: white; border: none; border-radius: 8px;
+    padding: 10px 16px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 16px;
+  }
+  button:hover { background: var(--primary-dark); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .error { color: var(--danger); font-size: 13px; margin-top: 8px; }
+  .success { color: var(--primary-dark); font-size: 13px; margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  th { color: var(--ink-muted); font-weight: 500; }
+  .hidden { display: none; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; }
+  .topbar button { margin-top: 0; background: transparent; color: var(--ink-muted); border: 1px solid var(--border); }
+  .topbar button:hover { background: var(--canvas); color: var(--ink); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 500; }
+  .badge.active { background: #d1fae5; color: #047857; }
+  .badge.inactive { background: #fee2e2; color: var(--danger); }
+  .row-actions button { margin: 0 0 0 6px; padding: 5px 10px; font-size: 12px; background: transparent; color: var(--ink-muted); border: 1px solid var(--border); }
+  .row-actions button:hover { background: var(--canvas); color: var(--ink); }
+  .row-actions button.danger { color: var(--danger); border-color: #fecaca; }
+  .row-actions button.danger:hover { background: #fef2f2; }
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.5);
+    display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50;
+  }
+  /* .modal-backdrop (display:flex) wuxuu ka adkaan jiray .hidden — sidaas darteed modal-ku wuu is-furan jiray */
+  .modal-backdrop.hidden { display: none; }
+  .modal-card { background: white; border-radius: 12px; padding: 20px; width: 100%; max-width: 420px; }
+  .modal-card h3 { margin-top: 0; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+  .modal-actions button.secondary { background: transparent; color: var(--ink-muted); border: 1px solid var(--border); }
+  .hint { color: var(--ink-muted); font-size: 12px; margin-top: 2px; margin-bottom: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Platform Admin</h1>
+  <p class="sub">Kani waa qalab gaar ah oo aan la xidhiidhin frontend-ka dugsiga — waxaa kaliya u isticmaala platform owner-ka si uu iskuullo cusub ugu daro systemka.</p>
+
+  <div class="card">
+    <label>Backend URL</label>
+    <input id="apiBase" value="" readonly />
+  </div>
+
+
+  <div id="loginCard" class="card">
+    <h3 style="margin-top:0">Login</h3>
+    <label>Email</label>
+    <input id="loginEmail" type="email" autocomplete="username" placeholder="Email-ka platform owner-ka" />
+    <label>Password</label>
+    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="Password" />
+    <button onclick="login()">Login</button>
+    <p id="loginError" class="error hidden"></p>
+  </div>
+
+  <div id="mainCard" class="hidden">
+    <div class="card">
+      <div class="topbar">
+        <h3 style="margin:0">Ku dar iskuul cusub</h3>
+        <button onclick="logout()">Logout</button>
+      </div>
+      <label>Magaca iskuulka</label>
+      <input id="schoolName" placeholder="Tusaale: Iskuul Horseed" />
+      <label>Magaca admin-ka</label>
+      <input id="adminName" placeholder="Tusaale: Xasan Maxamed" />
+      <label>Email-ka admin-ka</label>
+      <input id="adminEmail" placeholder="admin@horseed.so" />
+      <label>Password-ka admin-ka</label>
+      <input id="adminPassword" type="password" />
+      <button onclick="createSchool()">Ku dar iskuul</button>
+      <p id="createError" class="error hidden"></p>
+      <p id="createSuccess" class="success hidden"></p>
+    </div>
+
+    <div class="card">
+      <h3 style="margin-top:0">Iskuullada jira</h3>
+      <table>
+        <thead><tr><th>Magaca</th><th>Admin email</th><th>Taariikhda</th><th>Xaalad</th><th></th></tr></thead>
+        <tbody id="schoolsBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div id="editModal" class="modal-backdrop hidden">
+  <div class="modal-card">
+    <h3>Wax ka beddel iskuulka</h3>
+    <label>Magaca iskuulka</label>
+    <input id="editSchoolName" />
+    <label>Magaca admin-ka</label>
+    <input id="editAdminName" />
+    <label>Email-ka admin-ka</label>
+    <input id="editAdminEmail" />
+    <label>Password cusub (ka tag madhan si aan loo beddelin)</label>
+    <input id="editAdminPassword" type="password" placeholder="••••••••" />
+    <p class="hint">Ka tag madhan haddii aadan rabin inaad beddesho password-ka admin-ka.</p>
+    <p id="editError" class="error hidden"></p>
+    <div class="modal-actions">
+      <button class="secondary" onclick="closeEditModal()">Jooji</button>
+      <button onclick="saveEdit()">Keydi</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let token = null
+function apiBase() {
+  return window.location.origin
+}
+function show(id) { document.getElementById(id).classList.remove('hidden') }
+function hide(id) { document.getElementById(id).classList.add('hidden') }
+
+async function login() {
+  hide('loginError')
+  const email = document.getElementById('loginEmail').value
+  const password = document.getElementById('loginPassword').value
+  try {
+    const res = await fetch(apiBase() + '/platform/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Login failed')
+    token = data.token
+    hide('loginCard')
+    show('mainCard')
+    loadSchools()
+  } catch (err) {
+    document.getElementById('loginError').textContent = err.message
+    show('loginError')
+  }
+}
+
+function logout() {
+  token = null
+  hide('mainCard')
+  show('loginCard')
+}
+
+async function loadSchools() {
+  const res = await fetch(apiBase() + '/platform/schools', {
+    headers: { Authorization: 'Bearer ' + token },
+  })
+  const schools = await res.json()
+  window.__schools = schools
+  const body = document.getElementById('schoolsBody')
+  body.innerHTML = ''
+  for (const s of schools) {
+    const tr = document.createElement('tr')
+    const date = s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '—'
+    const isActive = s.isActive !== false
+    const nameTd = document.createElement('td')
+    nameTd.textContent = s.name
+    const adminTd = document.createElement('td')
+    adminTd.textContent = s.adminEmail || '—'
+    const dateTd = document.createElement('td')
+    dateTd.textContent = date
+    const statusTd = document.createElement('td')
+    statusTd.innerHTML = '<span class="badge ' + (isActive ? 'active' : 'inactive') + '">' +
+      (isActive ? 'Active' : 'Inactive') + '</span>'
+    const actionsTd = document.createElement('td')
+    actionsTd.className = 'row-actions'
+    const editBtn = document.createElement('button')
+    editBtn.textContent = 'Edit'
+    editBtn.onclick = () => openEditModal(s._id)
+    const toggleBtn = document.createElement('button')
+    toggleBtn.textContent = isActive ? 'Xidh (Inactive)' : 'Fur (Active)'
+    if (isActive) toggleBtn.className = 'danger'
+    toggleBtn.onclick = () => toggleSchoolActive(s._id, s.name, !isActive)
+    actionsTd.appendChild(editBtn)
+    actionsTd.appendChild(toggleBtn)
+    tr.appendChild(nameTd)
+    tr.appendChild(adminTd)
+    tr.appendChild(dateTd)
+    tr.appendChild(statusTd)
+    tr.appendChild(actionsTd)
+    body.appendChild(tr)
+  }
+}
+
+async function updateSchool(id, body) {
+  const res = await fetch(apiBase() + '/platform/schools/' + id, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data.error || 'Update failed')
+  return data
+}
+
+let editingSchoolId = null
+
+function openEditModal(id) {
+  const school = (window.__schools || []).find((s) => s._id === id)
+  if (!school) return
+  editingSchoolId = id
+  document.getElementById('editSchoolName').value = school.name || ''
+  document.getElementById('editAdminName').value = school.adminName || ''
+  document.getElementById('editAdminEmail').value = school.adminEmail || ''
+  document.getElementById('editAdminPassword').value = ''
+  hide('editError')
+  document.getElementById('editModal').classList.remove('hidden')
+}
+
+function closeEditModal() {
+  editingSchoolId = null
+  document.getElementById('editModal').classList.add('hidden')
+}
+
+async function saveEdit() {
+  hide('editError')
+  const body = {
+    name: document.getElementById('editSchoolName').value.trim(),
+    adminName: document.getElementById('editAdminName').value.trim(),
+    adminEmail: document.getElementById('editAdminEmail').value.trim(),
+  }
+  const newPassword = document.getElementById('editAdminPassword').value
+  if (newPassword) body.adminPassword = newPassword
+  try {
+    await updateSchool(editingSchoolId, body)
+    closeEditModal()
+    loadSchools()
+  } catch (err) {
+    document.getElementById('editError').textContent = err.message
+    show('editError')
+  }
+}
+
+async function toggleSchoolActive(id, name, nextActive) {
+  const verb = nextActive ? 'furto (active)' : 'xidhid (inactive)'
+  if (!confirm('Ma hubtaa inaad ' + name + ' ' + verb + '? Haddii aad xidho, admin/macalin/arday midkoodna ma geli karaan ilaa aad dib u furto.')) return
+  try {
+    await updateSchool(id, { isActive: nextActive })
+    loadSchools()
+  } catch (err) {
+    alert(err.message)
+  }
+}
+
+async function createSchool() {
+  hide('createError'); hide('createSuccess')
+  const schoolName = document.getElementById('schoolName').value
+  const adminName = document.getElementById('adminName').value
+  const adminEmail = document.getElementById('adminEmail').value
+  const adminPassword = document.getElementById('adminPassword').value
+  try {
+    const res = await fetch(apiBase() + '/platform/schools', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ schoolName, adminName, adminEmail, adminPassword }),
+    })
+    const data = await res.json()
+    if (!res.ok) throw new Error(data.error || 'Failed to create school')
+    document.getElementById('createSuccess').textContent =
+      schoolName + ' waa la abuuray. Admin login: ' + adminEmail
+    show('createSuccess')
+    document.getElementById('schoolName').value = ''
+    document.getElementById('adminName').value = ''
+    document.getElementById('adminEmail').value = ''
+    document.getElementById('adminPassword').value = ''
+    loadSchools()
+  } catch (err) {
+    document.getElementById('createError').textContent = err.message
+    show('createError')
+  }
+}
+</script>
+</body>
+</html>
