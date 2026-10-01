@@ -22,7 +22,7 @@ async function login(req, res) {
   const token = jwt.sign(
     { platformAdminId: admin._id, scope: 'platform' },
     process.env.JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: '1h' }
   )
   res.json({ token, admin: { id: admin._id, name: admin.name, email: admin.email } })
 }
