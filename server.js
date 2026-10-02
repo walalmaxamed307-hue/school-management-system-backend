@@ -107,8 +107,37 @@ app.use('/announcements', announcementRoutes)
 app.use('/schools-directory', schoolsDirectoryRoutes)
 app.use('/dashboard', dashboardRoutes)
 
-app.get('/health', (req, res) => {
-  res.json({ ok: true, db: require('mongoose').connection.readyState === 1 ? 'connected' : 'not connected' })
+app.get('/health', async (req, res) => {
+  const mongoose = require('mongoose')
+  let db = 'disconnected'
+  let dbLatencyMs = null
+
+  if (mongoose.connection.readyState === 1) {
+    const t0 = Date.now()
+    let timer
+    try {
+      await Promise.race([
+        mongoose.connection.db.admin().ping(),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 2000) }),
+      ])
+      db = 'ok'
+      dbLatencyMs = Date.now() - t0
+    } catch {
+      db = 'unreachable'
+    } finally {
+      clearTimeout(timer)
+    }
+  }
+
+  const ok = db === 'ok'
+  res.status(ok ? 200 : 503).json({
+    ok,
+    db,
+    dbLatencyMs,
+    uptimeSec: Math.round(process.uptime()),
+    memoryMB: Math.round(process.memoryUsage().rss / 1048576),
+    time: new Date().toISOString(),
+  })
 })
 
 // Qalab gaar ah oo platform owner-ku isticmaalo si uu iskuullo cusub ugu
