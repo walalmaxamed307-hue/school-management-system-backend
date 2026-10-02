@@ -61,6 +61,7 @@ const promotionRoutes = require('./routes/promotions')
 const announcementRoutes = require('./routes/announcements')
 const schoolsDirectoryRoutes = require('./routes/schoolsDirectory')
 const dashboardRoutes = require('./routes/dashboard')
+const homeworkRoutes = require('./routes/homework')
 const asyncHandler = require('./middleware/asyncHandler')
 const { cors, securityHeaders } = require('./middleware/security')
 
@@ -106,38 +107,10 @@ app.use('/promotions', promotionRoutes)
 app.use('/announcements', announcementRoutes)
 app.use('/schools-directory', schoolsDirectoryRoutes)
 app.use('/dashboard', dashboardRoutes)
+app.use('/homework', homeworkRoutes)
 
-app.get('/health', async (req, res) => {
-  const mongoose = require('mongoose')
-  let db = 'disconnected'
-  let dbLatencyMs = null
-
-  if (mongoose.connection.readyState === 1) {
-    const t0 = Date.now()
-    let timer
-    try {
-      await Promise.race([
-        mongoose.connection.db.admin().ping(),
-        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), 2000) }),
-      ])
-      db = 'ok'
-      dbLatencyMs = Date.now() - t0
-    } catch {
-      db = 'unreachable'
-    } finally {
-      clearTimeout(timer)
-    }
-  }
-
-  const ok = db === 'ok'
-  res.status(ok ? 200 : 503).json({
-    ok,
-    db,
-    dbLatencyMs,
-    uptimeSec: Math.round(process.uptime()),
-    memoryMB: Math.round(process.memoryUsage().rss / 1048576),
-    time: new Date().toISOString(),
-  })
+app.get('/health', (req, res) => {
+  res.json({ ok: true, db: require('mongoose').connection.readyState === 1 ? 'connected' : 'not connected' })
 })
 
 // Qalab gaar ah oo platform owner-ku isticmaalo si uu iskuullo cusub ugu

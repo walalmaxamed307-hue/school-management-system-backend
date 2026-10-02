@@ -22,5 +22,6 @@ module.exports = {
   Attendance: require('./Attendance'),
   TeacherAttendance: require('./TeacherAttendance'),
   Fee: require('./Fee'),
+  Homework: require('./Homework'),
   Counter: require('./Counter'),
 }
