@@ -33,7 +33,7 @@ const FEE_CATEGORIES = ['paid', 'free', 'discount']
 const HEADER_ALIASES = {
   fullName: ['name', 'fullname', 'studentname', 'magac', 'magaca', 'magacaardayga'],
   dob: ['dob', 'dateofbirth', 'birthdate', 'birthday', 'dhalasho', 'taariikhdhalasho'],
-  grade: ['grade', 'class', 'classname', 'fasal', 'fasalka'],
+  grade: ['grade', 'class', 'classname', 'fasal', 'fasalka','Form'],
   section: ['section', 'sectionname', 'qaybta'],
   parentName: ['parentname', 'parent', 'guardian', 'guardianname', 'waalid', 'waalidka'],
   parentPhone: ['parentphone', 'phone', 'parentmobile', 'mobile', 'guardianphone', 'telefoon', 'tel'],
@@ -107,41 +107,74 @@ function buildDate(y, m, d) {
 // student login-ku wuxuu isbarbar dhigaa dob.toISOString().slice(0,10).
 function parseDob(value, dateFormat, now = new Date()) {
   let date = null
+
   if (typeof value === 'number') {
-    // Excel serial date (1900 system). Saacadaha jajab ah waa la tuuraa.
-    date = new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 86400000)
-    if (Number.isNaN(date.getTime())) return { error: 'DOB is not a valid date' }
+    // Excel serial date (1900 system). Saacadaha jajabka ah waa la tuuraa.
+    date = new Date(
+      Date.UTC(1899, 11, 30) + Math.floor(value) * 86400000
+    )
+
+    if (Number.isNaN(date.getTime())) {
+      return { error: 'DOB is not a valid date' }
+    }
   } else {
     const s = cellToString(value)
-    if (!s) return { error: 'DOB is missing' }
+
+    if (!s) {
+      return { error: 'DOB is missing' }
+    }
+
     let m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/)
+
     if (m) {
+      // YYYY-MM-DD
       date = buildDate(+m[1], +m[2], +m[3])
-    } else if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) {
+    } else if (
+      (m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))
+    ) {
       const a = +m[1]
       const b = +m[2]
       const y = +m[3]
+
       let day
       let month
-      if (dateFormat === 'dmy') [day, month] = [a, b]
-      else if (dateFormat === 'mdy') [month, day] = [a, b]
-      else if (a > 12) [day, month] = [a, b]
-      else if (b > 12) [month, day] = [a, b]
-      else if (a === b) [day, month] = [a, b]
-      else return { error: `DOB "${s}" is ambiguous (day/month?) — use YYYY-MM-DD, a real Excel date, or --date-format=dmy|mdy` }
+
+      if (dateFormat === 'mdy') {
+        // Month / Day / Year
+        [month, day] = [a, b]
+      } else {
+        // Default: Day / Month / Year
+        [day, month] = [a, b]
+      }
+
       date = buildDate(y, month, day)
     } else {
-      return { error: `DOB "${s}" is not a recognised date (use YYYY-MM-DD or a real Excel date)` }
+      return {
+        error: `DOB "${s}" is not a recognised date (use YYYY-MM-DD or a real Excel date)`
+      }
     }
-    if (!date) return { error: `DOB "${s}" is not a valid calendar date` }
+
+    if (!date) {
+      return {
+        error: `DOB "${s}" is not a valid calendar date`
+      }
+    }
   }
-  const todayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
+
+  const todayUtc = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate()
+  )
+
   if (date.getTime() < MIN_DOB || date.getTime() > todayUtc) {
-    return { error: `DOB ${date.toISOString().slice(0, 10)} is outside the allowed range (1950-01-01 … today)` }
+    return {
+      error: `DOB ${date.toISOString().slice(0, 10)} is outside the allowed range (1950-01-01 … today)`
+    }
   }
+
   return { date }
 }
-
 // ctx: { classesByName: Map(norm -> class), sectionsByClass: Map(classId -> Map(norm -> section)), dateFormat }
 // Soo celisaa { data } ama { errors: [] } — waxay ku salaysan tahay xeerarka controller-ka + Enrollment hook.
 function parseRow(cells, map, ctx) {
@@ -524,4 +557,6 @@ if (require.main === module) {
       console.error('\nImport aborted:', err.message)
       process.exit(1)
     })
+
 }
+

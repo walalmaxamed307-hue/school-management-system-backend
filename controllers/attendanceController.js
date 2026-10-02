@@ -147,7 +147,76 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
   )
   res.status(201).json(record)
 }
+// POST /attendance/bulk-present — ardayda fasalka/section-ka/maalinta/session-kan
+// ee AAN weli la calaamadin oo dhan "present" ka dhig. Kuwa hore loo calaamadiyay
+// (absent/late/excused/present) waa la dayaa — MA overwrite-gareyso.
+async function markAllPresent(req, res) {
+  const { classId, sectionId, date, session } = req.body
+  if (!classId || !date || !session) {
+    return res.status(400).json({ error: 'classId, date, and session are required' })
+  }
+  if (!['before_break', 'after_break'].includes(session)) {
+    return res.status(400).json({ error: 'Invalid session' })
+  }
+  const sectionCheck = await requireSectionIfNeeded(req.user.schoolId, classId, sectionId)
+  if (sectionCheck) return res.status(sectionCheck.status).json({ error: sectionCheck.error })
+  if (!(await teacherCanAccess(req, classId, sectionId))) {
+    return res.status(403).json({ error: 'Not your homeroom class/section' })
+  }
 
+  const activeYear = await getActiveYear(req.user.schoolId)
+  if (!activeYear) return res.status(400).json({ error: 'No active academic year' })
+
+  const dayStart = new Date(date)
+  if (Number.isNaN(dayStart.getTime())) return res.status(400).json({ error: 'Invalid date' })
+  dayStart.setHours(0, 0, 0, 0)
+
+  // Isla shaandhada GET /attendance (list) — ardayda la arko oo kaliya.
+  const enrollments = await Enrollment.find({
+    schoolId: req.user.schoolId,
+    academicYearId: activeYear._id,
+    status: { $nin: ['transferred', 'withdrawn'] },
+    classId,
+    sectionId: sectionId || undefined,
+  })
+    .select('_id academicYearId classId sectionId')
+    .lean()
+
+  if (enrollments.length === 0) return res.json({ total: 0, marked: 0, alreadyMarked: 0 })
+
+  const now = new Date()
+  const result = await Attendance.bulkWrite(
+    enrollments.map((e) => ({
+      updateOne: {
+        filter: { schoolId: req.user.schoolId, enrollmentId: e._id, date: dayStart, session },
+        update: {
+          $setOnInsert: {
+            schoolId: req.user.schoolId,
+            academicYearId: e.academicYearId,
+            enrollmentId: e._id,
+            classId: e.classId,
+            sectionId: e.sectionId,
+            date: dayStart,
+            session,
+            status: 'present',
+            markedByUserId: req.user.userId,
+            markedAt: now,
+            createdAt: now,
+          },
+        },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  )
+
+  const marked = result.upsertedCount ?? 0
+  res.status(201).json({
+    total: enrollments.length,
+    marked,
+    alreadyMarked: enrollments.length - marked,
+  })
+}
 // GET /students/:id/absences?year=2025-2026 (defaults to the active year) —
 // used on the student's info page: "how many days absent/late this year".
 async function studentAbsenceCount(req, res) {
@@ -174,4 +243,4 @@ async function studentAbsenceCount(req, res) {
   res.json({ absentDays: absentDates.length, lateDays: lateDates.length, academicYear: activeYear.label })
 }
 
-module.exports = { list, mark, studentAbsenceCount }
+module.exports = { list, mark, markAllPresent, studentAbsenceCount }
