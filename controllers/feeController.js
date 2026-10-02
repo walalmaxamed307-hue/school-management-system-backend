@@ -49,7 +49,7 @@ async function list(req, res) {
   const enrollments = await Enrollment.find({
     schoolId: req.user.schoolId,
     academicYearId: activeYear._id,
-    status: { $ne: 'transferred' }, // arday la wareejiyay iskuulkan kama qayb-galo mar dambe
+   status: { $nin: ['transferred', 'withdrawn'] }, // arday la wareejiyay iskuulkan kama qayb-galo mar dambe
     classId,
     sectionId: sectionId || undefined,
   })
@@ -113,7 +113,9 @@ async function upsert(req, res) {
 
   const enrollment = await Enrollment.findOne({ _id: enrollmentId, schoolId: req.user.schoolId })
   if (!enrollment) return res.status(404).json({ error: 'Enrollment not found' })
-
+if (['transferred', 'withdrawn'].includes(enrollment.status)) {
+  return res.status(400).json({ error: 'This student is no longer enrolled in this school' })
+}
   const student = await Student.findOne({ _id: enrollment.studentId, schoolId: req.user.schoolId })
   if (!student) return res.status(404).json({ error: 'Student not found' })
 

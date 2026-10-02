@@ -117,7 +117,7 @@ async function getResults(req, res) {
   const enrollments = await Enrollment.find({
     schoolId: req.user.schoolId,
     academicYearId: exam.academicYearId,
-    status: { $ne: 'transferred' }, // arday la wareejiyay iskuulkan kama qayb-galo mar dambe
+  status: { $nin: ['transferred', 'withdrawn'] },// arday la wareejiyay iskuulkan kama qayb-galo mar dambe
     classId,
     sectionId: sectionId || undefined,
   })
@@ -174,7 +174,9 @@ async function putMark(req, res) {
 
   const enrollment = await Enrollment.findOne({ _id: enrollmentId, schoolId: req.user.schoolId })
   if (!enrollment) return res.status(404).json({ error: 'Enrollment not found' })
-
+if (['transferred', 'withdrawn'].includes(enrollment.status)) {
+  return res.status(400).json({ error: 'This student is no longer enrolled in this school' })
+}
   // Tenant isolation: maadadu waa in ay ka tirsan tahay iskuulkan (admin-ku
   // wuxuu marka kale ka gudbi jiray canEditSubject iyada oo aan la hubin).
   const subject = await Subject.findOne({ _id: subjectId, schoolId: req.user.schoolId })
@@ -237,7 +239,7 @@ async function publish(req, res) {
   const enrollments = await Enrollment.find({
     schoolId: req.user.schoolId,
     academicYearId: exam.academicYearId,
-    status: { $ne: 'transferred' }, // arday la wareejiyay iskuulkan kama qayb-galo mar dambe
+   status: { $nin: ['transferred', 'withdrawn'] }, // arday la wareejiyay iskuulkan kama qayb-galo mar dambe
     classId,
     sectionId: sectionId || undefined,
   })

@@ -68,7 +68,7 @@ async function create(req, res) {
   // studentCode waa la abuuraa halkan, weligiis lagama qaado body-ga —
   // global unique (models/Counter.js).
   const seq = await Counter.getNextSequence('studentCode')
-  const studentCode = `STU-${String(seq).padStart(4, '0')}`
+  const studentCode = `STU-${String(seq).padStart(6, '0')}`
 
   const student = await Student.create({
     schoolId: req.user.schoolId,

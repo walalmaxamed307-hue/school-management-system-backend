@@ -46,12 +46,19 @@ async function myResults(req, res) {
       continue
     }
 
-    const classResults = await StudentExamResult.find({
-      schoolId,
-      examId: exam._id,
-      classId: enrollment.classId,
-      sectionId: enrollment.sectionId,
-    })
+    const activeEnrollments = await Enrollment.find({
+  schoolId,
+  academicYearId: activeYear._id,
+  classId: enrollment.classId,
+  sectionId: enrollment.sectionId,
+  status: { $nin: ['transferred', 'withdrawn'] },
+}).select('_id').lean()
+
+const classResults = await StudentExamResult.find({
+  schoolId,
+  examId: exam._id,
+  enrollmentId: { $in: activeEnrollments.map((e) => e._id) },
+})
     const { rank, total, classSize } = rankAmong(classResults, enrollment._id)
 
     const marksObj = Object.fromEntries(myResult.marks)

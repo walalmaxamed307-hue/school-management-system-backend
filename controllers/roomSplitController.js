@@ -23,7 +23,7 @@ async function split(req, res) {
   const enrollments = await Enrollment.find({
     schoolId: req.user.schoolId,
     academicYearId: exam.academicYearId,
-    status: { $ne: 'transferred' }, // arday la wareejiyay looma qaybiyo qol imtixaan
+    status: { $nin: ['transferred', 'withdrawn'] },// arday la wareejiyay looma qaybiyo qol imtixaan
     classId: { $in: classIds },
   })
 
@@ -88,7 +88,9 @@ async function update(req, res) {
 
   const enrollment = await Enrollment.findOne({ _id: req.params.enrollmentId, schoolId: req.user.schoolId })
   if (!enrollment) return res.status(404).json({ error: 'Enrollment not found' })
-
+if (['transferred', 'withdrawn'].includes(enrollment.status)) {
+  return res.status(400).json({ error: 'This student is no longer enrolled in this school' })
+}
   let assignment = await RoomAssignment.findOne({
     schoolId: req.user.schoolId,
     examId: exam._id,
