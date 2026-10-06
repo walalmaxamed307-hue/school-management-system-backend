@@ -8,6 +8,9 @@ const teacherSchema = new mongoose.Schema(
     fullName: { type: String, required: true, trim: true },
     phone: { type: String, trim: true },
     isActive: { type: Boolean, default: true },
+    // Fee manager: macalin ay admin-ku u ogolaaday inuu maamulo bogga Fees.
+    // Role-kiisu weli waa 'teacher'; kani waa sifo dheeraad ah.
+    isFeeManager: { type: Boolean, default: false },
   },
   { timestamps: true }
 )

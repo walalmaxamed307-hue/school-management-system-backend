@@ -82,4 +82,38 @@ function requireRole(...allowedRoles) {
   }
 }
 
-module.exports = { authenticate, authenticateStudent, authenticateSession, requireRole }
+// Fees: admin, AMA macalin loo ogolaaday inuu yahay fee manager.
+// Macalinka waxaa DB-ga laga hubiyaa codsi kasta (ma aha token-ka), si
+// marka admin-ku ka qaado fee manager-nimada ay isla markiiba shaqayso,
+// iyo marka macalinka la xidho (isActive false).
+// Waa in la isticmaalaa ka dib `authenticate`.
+async function requireFeeAccess(req, res, next) {
+  try {
+    if (!req.user) return res.status(401).json({ error: 'Not authenticated' })
+    if (req.user.role === 'admin') return next()
+    if (req.user.role === 'teacher' && req.user.teacherId) {
+      // require halkan si aan looga baahnayn models marka file-kan la soo rarayo
+      const { Teacher } = require('../models')
+      const teacher = await Teacher.findOne({
+        _id: req.user.teacherId,
+        schoolId: req.user.schoolId,
+        isActive: true,
+        isFeeManager: true,
+      })
+        .select('_id')
+        .lean()
+      if (teacher) return next()
+    }
+    return res.status(403).json({ error: 'Requires admin or fee manager' })
+  } catch (err) {
+    next(err)
+  }
+}
+
+module.exports = {
+  authenticate,
+  authenticateStudent,
+  authenticateSession,
+  requireRole,
+  requireFeeAccess,
+}

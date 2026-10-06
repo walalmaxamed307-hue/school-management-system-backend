@@ -132,6 +132,7 @@ async function list(req, res) {
         phone: isAdmin ? t.phone : undefined,
         email: isAdmin ? usersById[String(t.userId)]?.email : undefined,
         isActive: t.isActive,
+        isFeeManager: !!t.isFeeManager,
         // Homeroom (attendance) — mid keliya, ma aha liis.
         class: scope?.classId?.name ?? null,
         section: scope?.sectionId?.name ?? null,
@@ -158,6 +159,9 @@ async function list(req, res) {
 async function create(req, res) {
   const { email, password, name, phone, homeroom } = req.body
   const assignments = dedupeAssignments(req.body.assignments)
+  if (req.body.isFeeManager !== undefined && typeof req.body.isFeeManager !== 'boolean') {
+    return res.status(400).json({ error: 'isFeeManager must be true or false' })
+  }
   if (!email || !password || !name || !String(name).trim()) {
     return res.status(400).json({ error: 'email, password, and name are required' })
   }
@@ -189,6 +193,7 @@ async function create(req, res) {
       userId: user._id,
       fullName: String(name).trim(),
       phone,
+      isFeeManager: req.body.isFeeManager === true,
     })
   } catch (err) {
     await User.deleteOne({ _id: user._id })
@@ -226,7 +231,12 @@ async function create(req, res) {
     throw err
   }
 
-  res.status(201).json({ id: teacher._id, name: teacher.fullName, email: user.email })
+  res.status(201).json({
+    id: teacher._id,
+    name: teacher.fullName,
+    email: user.email,
+    isFeeManager: teacher.isFeeManager,
+  })
 }
 
 // Macalin waa la xidhaa (deactivate), lama tirtiro: taariikhda (attendance,
@@ -235,6 +245,9 @@ async function create(req, res) {
 // macalin kale loo siin karo.
 async function deactivate(schoolId, teacher) {
   teacher.isActive = false
+  // Macalin la xidhay lama reebo fee manager-nimo: haddii dib loo furo, admin-ku
+  // waa inuu mar kale si ula kac ah u siiyaa.
+  teacher.isFeeManager = false
   await teacher.save()
   await User.updateOne({ _id: teacher.userId, schoolId }, { isActive: false })
   const activeYear = await getActiveYear(schoolId)
@@ -248,8 +261,11 @@ async function deactivate(schoolId, teacher) {
 // null), assignments (liiska oo dhan waa la bedelayaa). Field aan la soo
 // dirin waa la taabanayn.
 async function update(req, res) {
-  const { name, phone, email, password, isActive, homeroom } = req.body
+  const { name, phone, email, password, isActive, homeroom, isFeeManager } = req.body
   const schoolId = req.user.schoolId
+  if (isFeeManager !== undefined && typeof isFeeManager !== 'boolean') {
+    return res.status(400).json({ error: 'isFeeManager must be true or false' })
+  }
 
   const teacher = await Teacher.findOne({ _id: req.params.id, schoolId })
   if (!teacher) return res.status(404).json({ error: 'Teacher not found' })
@@ -285,6 +301,9 @@ async function update(req, res) {
   }
   if (name !== undefined) teacher.fullName = String(name).trim()
   if (phone !== undefined) teacher.phone = phone
+  // Macalin xidhan (isActive false) fee manager ma noqon karo.
+  const willBeActive = isActive === undefined ? teacher.isActive : isActive !== false
+  if (isFeeManager !== undefined) teacher.isFeeManager = willBeActive && isFeeManager
   await teacher.save()
 
   // 2) Homeroom + assignments (snapshot -> haddii cilad dhacdo, dib u soo celi)
@@ -336,7 +355,13 @@ async function update(req, res) {
     await User.updateOne({ _id: teacher.userId, schoolId }, { isActive: true })
   }
 
-  res.json({ id: teacher._id, name: teacher.fullName, email: user.email, isActive: teacher.isActive })
+  res.json({
+    id: teacher._id,
+    name: teacher.fullName,
+    email: user.email,
+    isActive: teacher.isActive,
+    isFeeManager: teacher.isFeeManager,
+  })
 }
 
 async function remove(req, res) {

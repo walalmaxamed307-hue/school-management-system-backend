@@ -173,3 +173,10 @@ Seed-ku wuxuu abuuraa KALIYA platform admin-ka (email/password `.env`-ka ka yima
 | PUT | `/:id` | teacher | Isla body-ga POST. Kan qoray kaliya, sanadka active kaliya. |
 | DELETE | `/:id` | teacher | Kan qoray kaliya. 204. |
 | GET | `/mine` | student token | Assignments-ka fasalka (+ section-ka) ardaygu ku jiro sanadka active. Fasalka waxaa laga qaadaa Enrollment-ka, ma aha wax ardaygu soo dirayo. Assignment leh `sectionId: null` waxaa arka section kasta oo fasalka ah. |
+
+## Fee manager (macalin maamula Fees)
+- `Teacher.isFeeManager` (boolean, default `false`). Role-ka macalinku weli waa `teacher`.
+- `POST /teachers` iyo `PATCH /teachers/:id` (admin kaliya) waxay aqbalaan `isFeeManager: true|false` (boolean kaliya, haddii kale 400).
+- `GET /teachers` wuxuu soo celiyaa `isFeeManager`. `GET /auth/me` iyo login-ka macalinku wuxuu soo celiyaa `user.isFeeManager`.
+- `GET /fees` iyo `POST /fees`: admin **ama** macalin `isFeeManager` ah (middleware `requireFeeAccess`). Macalinka waxaa DB-ga laga hubiyaa codsi kasta, sidaas darteed marka admin-ku ka qaado, waxay shaqayn joojisaa isla markiiba (token-ku isma beddelo).
+- Macalin la xidho (`isActive: false`) wuxuu luminayaa `isFeeManager`.

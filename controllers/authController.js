@@ -18,7 +18,7 @@ const {
 function signStaffToken(user, teacherId) {
   const payload = { userId: user._id, schoolId: user.schoolId, role: user.role }
   if (teacherId) payload.teacherId = teacherId
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '12h' })
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' })
 }
 
 // Profile-ka frontend-ku u isticmaalo session-ka (login iyo /auth/me labadaba).
@@ -36,6 +36,7 @@ async function buildStaffProfile(user) {
       teacherId = teacher._id
       profile.name = teacher.fullName
       profile.teacherId = teacher._id
+      profile.isFeeManager = !!teacher.isFeeManager
 
       // Homeroom scope-ku waa sanad-gaar (year-scoped) — kaliya sanadka
       // ACTIVE ah ayaa la eegaa.
@@ -149,7 +150,7 @@ async function studentLogin(req, res) {
   const token = jwt.sign(
     { studentId: student._id, schoolId: student.schoolId, scope: 'student' },
     process.env.JWT_SECRET,
-    { expiresIn: '12h' }
+    { expiresIn: '7d' }
   )
   res.json({ token, user: await buildStudentProfile(student) })
 }
