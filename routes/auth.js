@@ -9,6 +9,7 @@ const router = express.Router()
 router.post('/login', loginLimiter, asyncHandler(login))
 router.post('/student-login', loginLimiter, asyncHandler(studentLogin))
 router.get('/me', authenticateSession, asyncHandler(me))
+// Admin/macalin kaliya (authenticate wuxuu diidaa student token).
 router.post('/change-password', authenticate, changePasswordLimiter, asyncHandler(changePassword))
 
 module.exports = router

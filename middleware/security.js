@@ -98,41 +98,40 @@ setInterval(() => {
   for (const [k, v] of hits) if (now - v.start > WINDOW_MS) hits.delete(k)
 }, WINDOW_MS).unref()
 
-// CHANGE-PASSWORD RATE-LIMIT — ka hortag qof token-ka la xaday oo isku dayaya
-// inuu password-ka hadda jira qiyaaso. Waxaa loo tirinayaa userId (ma aha
-// IP), 5 isku-day oo fashilmay / 15 daqiiqo. Guul waa nadiifisaa.
-const pwHits = new Map()
+
+// PASSWORD-CHANGE RATE-LIMIT — qof leh token la xaday ma qiyaasi karo password-ka
+// hadda jira. Ugu badnaan 5 isku-day / 15 daqiiqo user kasta (PASSWORD_CHANGE_MAX_ATTEMPTS).
+// Beddel guulaystay wuxuu nadiifiyaa tirada. In-memory (hal server) — sida loginLimiter.
+const MAX_PASSWORD_CHANGES = Number(process.env.PASSWORD_CHANGE_MAX_ATTEMPTS) || 5
+const changeHits = new Map()
 
 function changePasswordLimiter(req, res, next) {
   const now = Date.now()
-  const key = `pw|${req.user?.userId ?? req.ip}`
-  const entry = bump2(pwHits, key, now)
-  if (entry.count > MAX_PER_ACCOUNT) {
+  const key = String(req.user?.userId || req.ip)
+  let entry = changeHits.get(key)
+  if (!entry || now - entry.start > WINDOW_MS) {
+    entry = { start: now, count: 0 }
+    changeHits.set(key, entry)
+  }
+  entry.count += 1
+
+  if (entry.count > MAX_PASSWORD_CHANGES) {
     const retrySeconds = Math.max(1, Math.ceil((entry.start + WINDOW_MS - now) / 1000))
     res.setHeader('Retry-After', String(retrySeconds))
     return res.status(429).json({
       error: `Isku-day badan. Fadlan ${Math.ceil(retrySeconds / 60)} daqiiqo kadib isku day.`,
     })
   }
+
   res.on('finish', () => {
-    if (res.statusCode < 400) pwHits.delete(key)
+    if (res.statusCode < 400) changeHits.delete(key)
   })
   next()
 }
 
-function bump2(map, key, now) {
-  let entry = map.get(key)
-  if (!entry || now - entry.start > WINDOW_MS) {
-    entry = { start: now, count: 0 }
-    map.set(key, entry)
-  }
-  entry.count += 1
-  return entry
-}
-
 setInterval(() => {
   const now = Date.now()
-  for (const [k, v] of pwHits) if (now - v.start > WINDOW_MS) pwHits.delete(k)
+  for (const [k, v] of changeHits) if (now - v.start > WINDOW_MS) changeHits.delete(k)
 }, WINDOW_MS).unref()
 
 module.exports = { cors, securityHeaders, loginLimiter, changePasswordLimiter }

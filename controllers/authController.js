@@ -36,7 +36,6 @@ async function buildStaffProfile(user) {
       teacherId = teacher._id
       profile.name = teacher.fullName
       profile.teacherId = teacher._id
-      profile.isFeeManager = !!teacher.isFeeManager
 
       // Homeroom scope-ku waa sanad-gaar (year-scoped) — kaliya sanadka
       // ACTIVE ah ayaa la eegaa.
@@ -177,47 +176,61 @@ async function me(req, res) {
   res.json({ user: profile })
 }
 
-// Admin ama macalin wuxuu beddelan karaa password-kiisa. Waxaa loo baahan
-// yahay password-ka hadda jira (si qof token-ka helay uusan u beddeli karin).
-// NOTE: khaladka password-ka hadda jira waa 400 (MA aha 401) — frontend-ka
-// api.js 401 kasta wuu u tarjumaa "session dhacay" oo user-ka ayuu ka bixiyaa.
-const MIN_NEW_PASSWORD = 8
 
-async function changePassword(req, res) {
-  const { currentPassword, newPassword } = req.body
-  if (
-    typeof currentPassword !== 'string' ||
-    typeof newPassword !== 'string' ||
-    !currentPassword ||
-    !newPassword
-  ) {
-    return res.status(400).json({ error: 'Password-ka hadda jira iyo kan cusub labaduba waa loo baahan yahay' })
+// ---------------------------------------------------------------------------
+// Beddelka password-ka (admin/macalin, isaga oo login ah).
+// Ardaygu password ma laha (studentCode + dob), sidaas darteed route-kan waa
+// STAFF kaliya (authenticate middleware wuxuu diidaa student token).
+//
+// MUHIIM: password-ka hadda jira oo khaldan HA soo celin 401 — frontend-ka
+// api.js wuxuu 401 u aqoonsadaa "token dhacay" oo user-ka ayuu ka saaraa
+// session-ka. 400 ayaa loo isticmaalaa.
+// ---------------------------------------------------------------------------
+const MIN_NEW_PASSWORD = 8
+// bcrypt wuxuu ka gooyaa wixii ka badan 72 byte — password aad u dheer si
+// aamusan ayuu u jarayaa (laba password oo kala duwan ayaa isku mid noqon
+// kara), sidaas darteed si cad ayaan u xaddidnaa.
+const MAX_PASSWORD_BYTES = 72
+
+// Pure function (DB ma u baahna) — si fudud loo test-gareeyo.
+// Waxay soo celisaa fariin khalad ah, ama null haddii wax walba sax yihiin.
+function validatePasswordChange(body) {
+  const { currentPassword, newPassword } = body || {}
+  if (typeof currentPassword !== 'string' || !currentPassword) {
+    return 'Password-ka hadda jira waa loo baahan yahay'
+  }
+  if (typeof newPassword !== 'string' || !newPassword) {
+    return 'Password-ka cusub waa loo baahan yahay'
   }
   if (newPassword.length < MIN_NEW_PASSWORD) {
-    return res.status(400).json({ error: `Password-ka cusub waa inuu ahaadaa ugu yaraan ${MIN_NEW_PASSWORD} xaraf` })
+    return `Password-ka cusub waa inuu ugu yaraan ${MIN_NEW_PASSWORD} xaraf yahay`
   }
-  // bcrypt wuxuu akhriyaa 72 byte oo kaliya — kuwa dheer si aamaan ah u diid.
-  if (Buffer.byteLength(newPassword, 'utf8') > 72) {
-    return res.status(400).json({ error: 'Password-ka cusub aad buu u dheer yahay (ugu badnaan 72 xaraf)' })
+  if (Buffer.byteLength(newPassword, 'utf8') > MAX_PASSWORD_BYTES) {
+    return `Password-ka cusub aad buu u dheer yahay (ugu badnaan ${MAX_PASSWORD_BYTES} byte)`
   }
   if (newPassword === currentPassword) {
-    return res.status(400).json({ error: 'Password-ka cusub waa inuu ka duwanaadaa kan hadda jira' })
+    return 'Password-ka cusub waa inuu ka duwan yahay kan hadda jira'
   }
+  return null
+}
+
+async function changePassword(req, res) {
+  const problem = validatePasswordChange(req.body)
+  if (problem) return res.status(400).json({ error: problem })
+  const { currentPassword, newPassword } = req.body
 
   const user = await User.findOne({ _id: req.user.userId, schoolId: req.user.schoolId, isActive: true })
   if (!user) return res.status(401).json({ error: 'Account no longer active' })
-  if (!(await schoolIsActive(user.schoolId))) {
-    return res.status(403).json({ error: 'This school account is disabled' })
-  }
 
   const ok = await bcrypt.compare(currentPassword, user.passwordHash)
   if (!ok) return res.status(400).json({ error: 'Password-ka hadda jira waa qaldan yahay' })
 
-  user.passwordHash = await bcrypt.hash(newPassword, 10)
-  await user.save()
+  // updateOne (ma aha user.save()) — validators-ka model-ka lama wado, sidaas
+  // darteed xog hore oo aan buuxin (tusaale name) ma joojin karto beddelka.
+  const passwordHash = await bcrypt.hash(newPassword, 10)
+  await User.updateOne({ _id: user._id, schoolId: user.schoolId }, { passwordHash })
 
-  // Token cusub (isla payload-ka) si session-ka uusan u go'in.
-  res.json({ message: 'Password-ka waa la beddelay', token: signStaffToken(user, req.user.teacherId) })
+  res.json({ ok: true })
 }
 
-module.exports = { login, studentLogin, me, changePassword }
+module.exports = { login, studentLogin, me, changePassword, validatePasswordChange }
