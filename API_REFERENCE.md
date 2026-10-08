@@ -31,7 +31,7 @@ to create a new school + its first admin.
 |---|---|---|---|
 | POST | `/login` | — | `{email, password}` → `{token, user}`. `user.class`/`user.section` populated for a teacher's homeroom, if any. |
 | GET | `/me` | any | Returns the raw JWT payload (ids only, not full profile). |
-| POST | `/change-password` | admin, teacher | `{currentPassword, newPassword}` (cusub ≥ 8 xaraf, ≠ hadda jira) → `{message, token}`. Password-ka hadda jira qaldan = 400 (ma aha 401). 5 isku-day oo fashilmay / 15 daqiiqo / user. |
+| POST | `/change-password` | admin, teacher | `{currentPassword, newPassword}` → `{ok:true}`. New password: 8+ chars, ≤72 bytes, must differ from current. Wrong current password → **400** (not 401, so the frontend doesn't log the user out). Rate-limited: 5 attempts / 15 min per user (`PASSWORD_CHANGE_MAX_ATTEMPTS`). Students have no password → 403. |
 
 ## `/platform`
 | Method | Path | Role | Notes |
@@ -139,6 +139,7 @@ Reconcile this naming in Step 8.
 | Method | Path | Role | Notes |
 |---|---|---|---|
 | GET | `/stats` | any | `{totalStudents, totalTeachers, attendanceToday: {present,absent,late,excused}, totalCollectedThisMonth, month, academicYear}`. **`attendanceToday` counts session-RECORDS, not unique students** — a student with two sessions today can appear in two different buckets. Fine for a dashboard snapshot; don't use it where an exact per-student count matters (use `/students/:id/absences` for that). |
+| GET | `/risk-students` | admin | At-risk students of the active year: `{academicYear, total, highCount, thresholds, students:[{studentId, enrollmentId, name, studentCode, className, sectionName, parentName, parentPhone, level:'high'\|'medium', reasons:[{type:'attendance'\|'fees'\|'results', text}]}]}`. Rules (see `utils/riskScoring.js` `RISK_CONFIG`): attendance < 75% over the last 30 days (min 6 sessions, excused ignored) · 2+ completed billing months unpaid/partial (free students skipped; months = months that have any Fee record) · failed 2+ **published** exams (total < passMark, same rule as promotion). 2+ signals = `high`, 1 = `medium`. |
 
 ## `/schools-directory`
 | Method | Path | Role | Notes |
@@ -164,19 +165,3 @@ Reconcile this naming in Step 8.
 
 ## Seed (`npm run seed`)
 Seed-ku wuxuu abuuraa KALIYA platform admin-ka (email/password `.env`-ka ka yimaada: `PLATFORM_ADMIN_EMAIL`, `PLATFORM_ADMIN_PASSWORD`). Wax iskuul, admin, macalin ama arday ah ma abuuro, mana tirtiro xog jirta. Iskuullada waxaa abuura platform admin-ka (`platform-admin.html`).
-
-## `/homework` (assignments / shaqo-guri)
-| Method | Path | Role | Notes |
-|---|---|---|---|
-| GET | `/` | teacher | Assignments-ka macalinku laftiisu qoray (sanadka active), kuwa ugu cusub marka hore. |
-| POST | `/` | teacher | `{classId, sectionId?, subjectId, question}` (`question` ≤ 4000 xaraf). Macalinku waa inuu leeyahay `TeacherAssignment` fasalkaas + maadadaas (403 haddii kale). `sectionId` null = fasalka oo dhan (kaliya haddii xilsaarkiisu yahay fasalka oo dhan). |
-| PUT | `/:id` | teacher | Isla body-ga POST. Kan qoray kaliya, sanadka active kaliya. |
-| DELETE | `/:id` | teacher | Kan qoray kaliya. 204. |
-| GET | `/mine` | student token | Assignments-ka fasalka (+ section-ka) ardaygu ku jiro sanadka active. Fasalka waxaa laga qaadaa Enrollment-ka, ma aha wax ardaygu soo dirayo. Assignment leh `sectionId: null` waxaa arka section kasta oo fasalka ah. |
-
-## Fee manager (macalin maamula Fees)
-- `Teacher.isFeeManager` (boolean, default `false`). Role-ka macalinku weli waa `teacher`.
-- `POST /teachers` iyo `PATCH /teachers/:id` (admin kaliya) waxay aqbalaan `isFeeManager: true|false` (boolean kaliya, haddii kale 400).
-- `GET /teachers` wuxuu soo celiyaa `isFeeManager`. `GET /auth/me` iyo login-ka macalinku wuxuu soo celiyaa `user.isFeeManager`.
-- `GET /fees` iyo `POST /fees`: admin **ama** macalin `isFeeManager` ah (middleware `requireFeeAccess`). Macalinka waxaa DB-ga laga hubiyaa codsi kasta, sidaas darteed marka admin-ku ka qaado, waxay shaqayn joojisaa isla markiiba (token-ku isma beddelo).
-- Macalin la xidho (`isActive: false`) wuxuu luminayaa `isFeeManager`.

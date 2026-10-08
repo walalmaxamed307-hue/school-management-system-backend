@@ -37,28 +37,6 @@ async function stats(req, res) {
     if (attendanceToday[c._id.session]) attendanceToday[c._id.session][c._id.status] = c.count
   }
 
-  // % ardayda joogta maanta — ARDAY ahaan (ma aha session ahaan): arday waa
-  // "jooga" haddii uu ugu yaraan hal session ka ahaa present ama late.
-  // `marked` = ardayda maanta la calaamadiyay (kuwa weli aan la qaadin lama
-  // tirinayo, haddii kale subaxdii oo dhan 0% ayuu muujin lahaa).
-  const studentAgg = await Attendance.aggregate([
-    { $match: { schoolId: schoolObjectId, date: { $gte: todayStart, $lt: todayEnd } } },
-    {
-      $group: {
-        _id: '$enrollmentId',
-        attended: { $max: { $cond: [{ $in: ['$status', ['present', 'late']] }, 1, 0] } },
-      },
-    },
-    { $group: { _id: null, marked: { $sum: 1 }, attended: { $sum: '$attended' } } },
-  ])
-  const marked = studentAgg[0]?.marked ?? 0
-  const attended = studentAgg[0]?.attended ?? 0
-  const attendanceTodayStudents = {
-    marked,
-    attended,
-    ratePercent: marked > 0 ? Math.round((attended / marked) * 100) : null,
-  }
-
   const thisMonth = new Date().toISOString().slice(0, 7)
   const feeAgg = await Fee.aggregate([
     { $match: { schoolId: schoolObjectId, month: thisMonth } },
@@ -90,7 +68,6 @@ async function stats(req, res) {
     totalStudents,
     totalTeachers,
     attendanceToday,
-    attendanceTodayStudents,
     totalCollectedThisMonth,
     feesSummary,
     month: thisMonth,
