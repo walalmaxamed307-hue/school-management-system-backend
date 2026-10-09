@@ -1,0 +1,13 @@
+const express = require('express')
+const { list, create, update, download, remove } = require('../controllers/assignmentController')
+const { authenticate, requireRole } = require('../middleware/auth')
+const { singleFile } = require('../middleware/upload')
+const { ASSIGNMENT_MAX_BYTES } = require('../services/fileRules')
+const asyncHandler = require('../middleware/asyncHandler')
+const router = express.Router()
+router.get('/', authenticate, requireRole('admin', 'teacher'), asyncHandler(list))
+router.post('/', authenticate, requireRole('admin', 'teacher'), singleFile('file', ASSIGNMENT_MAX_BYTES), asyncHandler(create))
+router.put('/:id', authenticate, requireRole('admin', 'teacher'), singleFile('file', ASSIGNMENT_MAX_BYTES), asyncHandler(update))
+router.get('/:id/download', authenticate, requireRole('admin', 'teacher'), asyncHandler(download))
+router.delete('/:id', authenticate, requireRole('admin', 'teacher'), asyncHandler(remove))
+module.exports = router

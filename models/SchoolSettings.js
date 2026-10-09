@@ -7,6 +7,8 @@ const schoolSettingsSchema = new mongoose.Schema(
     phone: { type: String, trim: true },
     address: { type: String, trim: true },
     logoUrl: { type: String, trim: true },
+    // R2 key-ga waa private; browser-ka waxaa loo diraa signed logoUrl kaliya.
+    logoKey: { type: String, default: null },
     defaultExamMaxMark: { type: Number, required: true, default: 100 },
     defaultPassMark: { type: Number, required: true, default: 50 },
     defaultStandardFeeAmount: { type: Number, required: true, default: 0 },

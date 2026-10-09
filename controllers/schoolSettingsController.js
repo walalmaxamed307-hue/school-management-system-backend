@@ -1,9 +1,40 @@
 const { SchoolSettings, AcademicYear } = require('../models')
+const storage = require('../services/storage')
+const { inspectFile, LOGO_TYPES } = require('../services/fileRules')
+
+async function present(settings) {
+  const raw = settings.toObject ? settings.toObject() : settings
+  const { logoKey, ...safe } = raw
+  let logoUrl = safe.logoUrl || null
+  if (logoKey && storage.isConfigured()) {
+    try { logoUrl = await storage.signedUrl(logoKey, { expiresIn: 6 * 3600 }) } catch (err) { console.error('logo URL failed:', err.message) }
+  }
+  return { ...safe, logoUrl }
+}
 
 async function getSettings(req, res) {
   const settings = await SchoolSettings.findOne({ schoolId: req.user.schoolId })
   if (!settings) return res.status(404).json({ error: 'SchoolSettings not found for this school' })
-  res.json(settings)
+  res.json(await present(settings))
+}
+
+async function uploadLogo(req, res) {
+  storage.requireConfigured()
+  if (!req.file) return res.status(400).json({ error: 'Dooro logo PNG ama JPG' })
+  const { ext, mime } = inspectFile(req.file, LOGO_TYPES)
+  const key = storage.logoKey(req.user.schoolId, ext)
+  await storage.putObject({ key, body: req.file.buffer, contentType: mime })
+  const old = await SchoolSettings.findOneAndUpdate({ schoolId: req.user.schoolId }, { logoKey: key, logoUrl: null }, { new: false })
+  if (!old) { await storage.deleteObject(key); return res.status(404).json({ error: 'SchoolSettings not found for this school' }) }
+  await storage.deleteObject(old.logoKey)
+  res.json(await present(await SchoolSettings.findOne({ schoolId: req.user.schoolId })))
+}
+
+async function removeLogo(req, res) {
+  const old = await SchoolSettings.findOneAndUpdate({ schoolId: req.user.schoolId }, { logoKey: null, logoUrl: null }, { new: false })
+  if (!old) return res.status(404).json({ error: 'SchoolSettings not found for this school' })
+  await storage.deleteObject(old.logoKey)
+  res.json(await present(await SchoolSettings.findOne({ schoolId: req.user.schoolId })))
 }
 
 // currentAcademicYearId is deliberately NOT patchable here — that pointer
@@ -14,7 +45,6 @@ const PATCHABLE_FIELDS = [
   'name',
   'phone',
   'address',
-  'logoUrl',
   'defaultExamMaxMark',
   'defaultPassMark',
   'defaultStandardFeeAmount',
@@ -64,7 +94,7 @@ async function updateSettings(req, res) {
     )
   }
 
-  res.json(settings)
+  res.json(await present(settings))
 }
 
-module.exports = { getSettings, updateSettings }
+module.exports = { getSettings, updateSettings, uploadLogo, removeLogo }

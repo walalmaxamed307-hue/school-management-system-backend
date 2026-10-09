@@ -63,6 +63,8 @@ const schoolsDirectoryRoutes = require('./routes/schoolsDirectory')
 const dashboardRoutes = require('./routes/dashboard')
 const ownerRoutes = require('./routes/owner')
 const ownerAccountRoutes = require('./routes/ownerAccounts')
+const assignmentRoutes = require('./routes/assignments')
+const myAssignmentsRoutes = require('./routes/myAssignments')
 const asyncHandler = require('./middleware/asyncHandler')
 const { cors, securityHeaders } = require('./middleware/security')
 
@@ -110,6 +112,8 @@ app.use('/schools-directory', schoolsDirectoryRoutes)
 app.use('/dashboard', dashboardRoutes)
 app.use('/owner', ownerRoutes)
 app.use('/owner-accounts', ownerAccountRoutes)
+app.use('/assignments', assignmentRoutes)
+app.use('/my-assignments', myAssignmentsRoutes)
 
 app.get('/health', (req, res) => {
   res.json({ ok: true, db: require('mongoose').connection.readyState === 1 ? 'connected' : 'not connected' })
