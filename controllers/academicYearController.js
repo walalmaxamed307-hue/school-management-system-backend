@@ -1,7 +1,8 @@
 const { AcademicYear, SchoolSettings } = require('../models')
 
 async function list(req, res) {
-  const years = await AcademicYear.find({ schoolId: req.user.schoolId }).sort({ startYear: 1 })
+  const schoolId = req.user?.schoolId || req.student?.schoolId
+  const years = await AcademicYear.find({ schoolId }).sort({ startYear: 1 })
   res.json(years)
 }
 

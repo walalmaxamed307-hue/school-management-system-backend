@@ -1,5 +1,6 @@
 const mongoose = require('mongoose')
 const { Student, Teacher, Attendance, Fee, Enrollment, AcademicYear } = require('../models')
+const { lastDayKeys, buildAttendanceTrend } = require('../utils/ownerStats')
 
 async function stats(req, res) {
   // aggregate() ma u beddelo string-ka ObjectId si toos ah (find() ayaa sameeya) —
@@ -16,18 +17,22 @@ async function stats(req, res) {
   todayStart.setHours(0, 0, 0, 0)
   const todayEnd = new Date(todayStart)
   todayEnd.setDate(todayEnd.getDate() + 1)
+  const trendStart = new Date(todayStart)
+  trendStart.setDate(trendStart.getDate() - 13)
+  const trendDays = lastDayKeys(14, todayStart)
 
   // Session kasta (before_break/after_break) waa xog gooni ah — la kala
   // saarayaa halkan si dashboard-ku u muujiyo labada si sax ah (ma aha isku
   // dar aan macno lahayn oo laba arday isku mid ah ka dhigaya afar).
-  const todayCounts = await Attendance.aggregate([
-    {
-      $match: {
-        schoolId: schoolObjectId,
-        date: { $gte: todayStart, $lt: todayEnd },
-      },
-    },
-    { $group: { _id: { session: '$session', status: '$status' }, count: { $sum: 1 } } },
+  const [todayCounts, trendRows] = await Promise.all([
+    Attendance.aggregate([
+      { $match: { schoolId: schoolObjectId, date: { $gte: todayStart, $lt: todayEnd } } },
+      { $group: { _id: { session: '$session', status: '$status' }, count: { $sum: 1 } } },
+    ]),
+    Attendance.aggregate([
+      { $match: { schoolId: schoolObjectId, date: { $gte: trendStart, $lt: todayEnd } } },
+      { $group: { _id: { d: { $dateToString: { format: '%Y-%m-%d', date: '$date' } }, session: '$session', status: '$status' }, count: { $sum: 1 } } },
+    ]),
   ])
   const attendanceToday = {
     before_break: { present: 0, absent: 0, late: 0, excused: 0 },
@@ -72,6 +77,7 @@ async function stats(req, res) {
     feesSummary,
     month: thisMonth,
     academicYear: activeYear?.label ?? null,
+    attendanceTrend: buildAttendanceTrend(trendRows.map((row) => ({ date: row._id.d, session: row._id.session, status: row._id.status, count: row.count })), trendDays),
   })
 }
 

@@ -13,7 +13,8 @@ async function present(settings) {
 }
 
 async function getSettings(req, res) {
-  const settings = await SchoolSettings.findOne({ schoolId: req.user.schoolId })
+  const schoolId = req.user?.schoolId || req.student?.schoolId
+  const settings = await SchoolSettings.findOne({ schoolId })
   if (!settings) return res.status(404).json({ error: 'SchoolSettings not found for this school' })
   res.json(await present(settings))
 }
