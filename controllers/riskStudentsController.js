@@ -10,11 +10,11 @@ const {
 } = require('../models')
 const { RISK_CONFIG, attendanceSignal, feeSignal, resultSignal, riskLevel } = require('../utils/riskScoring')
 
-// GET /dashboard/risk-students  (admin kaliya — fees + natiijo xog xasaasi ah)
+// Xisaabinta waxaa lagu wadaagaa: admin (GET /dashboard/risk-students) iyo
+// owner (GET /owner/overview) — hal meel, hal xeer.
 // Xogta oo dhan waxaa laga soo qaadaa 4 query-yo oo kooban (ma aha query
 // arday kasta), sidaa darteed wuu dhaqso yahay xitaa iskuul weyn.
-async function riskStudents(req, res) {
-  const schoolId = req.user.schoolId
+async function computeRiskStudents(schoolId) {
   const schoolObjectId = new mongoose.Types.ObjectId(schoolId)
 
   const activeYear = await AcademicYear.findOne({ schoolId, status: 'active' })
@@ -27,7 +27,7 @@ async function riskStudents(req, res) {
     },
   }
   if (!activeYear) {
-    return res.json({ ...base, academicYear: null, total: 0, highCount: 0, students: [] })
+    return { ...base, academicYear: null, total: 0, highCount: 0, students: [] }
   }
 
   const since = new Date()
@@ -152,13 +152,18 @@ async function riskStudents(req, res) {
   // Khatarta ugu sarreysa marka hore, kadib magac ahaan.
   students.sort((a, b) => b.reasons.length - a.reasons.length || a.name.localeCompare(b.name))
 
-  res.json({
+  return {
     ...base,
     academicYear: activeYear.label,
     total: students.length,
     highCount: students.filter((s) => s.level === 'high').length,
     students,
-  })
+  }
 }
 
-module.exports = { riskStudents }
+// GET /dashboard/risk-students  (admin kaliya — fees + natiijo xog xasaasi ah)
+async function riskStudents(req, res) {
+  res.json(await computeRiskStudents(req.user.schoolId))
+}
+
+module.exports = { riskStudents, computeRiskStudents }

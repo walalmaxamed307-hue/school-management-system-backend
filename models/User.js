@@ -16,7 +16,9 @@ const userSchema = new mongoose.Schema(
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
     email: { type: String, required: true, trim: true, lowercase: true },
     passwordHash: { type: String, required: true },
-    role: { type: String, required: true, enum: ['admin', 'teacher'] },
+    // 'owner' = milkiilaha iskuulka: akoon READ-ONLY oo email+password kaliya leh
+    // (name lama rabo). Wuxuu arkaa kaliya /owner/overview (dashboard-ka milkiilaha).
+    role: { type: String, required: true, enum: ['admin', 'teacher', 'owner'] },
     name: {
       type: String,
       trim: true,

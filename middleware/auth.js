@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken')
+const { User, School } = require('../models')
 
 function readBearer(req) {
   const header = req.headers.authorization
@@ -24,10 +25,67 @@ function authenticate(req, res, next) {
     if (payload.scope || !payload.userId || !payload.schoolId) {
       return res.status(403).json({ error: 'This endpoint requires a school staff token' })
     }
+    // DENY-BY-DEFAULT: milkiilaha iskuulka (role 'owner') wuxuu arki karaa
+    // /owner/* kaliya (authenticateOwner). Halkan waa laga diiday, si route
+    // kasta oo hore u jiray (oo ay ku jiraan kuwa "any staff" ah) uusan
+    // owner u furmin — xitaa haddii route-ka dambe lagu daro role check la'aan.
+    if (payload.role === 'owner') {
+      return res.status(403).json({ error: 'Owner accounts can only access the owner dashboard' })
+    }
     req.user = payload
     next()
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' })
+  }
+}
+
+// Sida authenticate, laakiin owner-ka sidoo kale wuu ogol yahay. Isticmaal
+// KALIYA route-yada lagu wadaago (change-password).
+function authenticateStaffOrOwner(req, res, next) {
+  const token = readBearer(req)
+  if (!token) {
+    return res.status(401).json({ error: 'Missing or malformed Authorization header' })
+  }
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET)
+    if (payload.scope || !payload.userId || !payload.schoolId) {
+      return res.status(403).json({ error: 'This endpoint requires a school staff token' })
+    }
+    req.user = payload
+    next()
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' })
+  }
+}
+
+// Owner-dashboard endpoints only (/owner/*). Ka sokow authenticate-ka kale,
+// halkan DB-ga ayaa la eegaa wicitaan kasta: owner la joojiyay ama iskuul
+// la xiray token-kiisa isla markiiba wuu dhacayaa (ma sugayo 7 maalmood).
+async function authenticateOwner(req, res, next) {
+  const token = readBearer(req)
+  if (!token) {
+    return res.status(401).json({ error: 'Missing or malformed Authorization header' })
+  }
+  let payload
+  try {
+    payload = jwt.verify(token, process.env.JWT_SECRET)
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' })
+  }
+  if (payload.scope || !payload.userId || !payload.schoolId || payload.role !== 'owner') {
+    return res.status(403).json({ error: 'This endpoint requires an owner token' })
+  }
+  try {
+    const user = await User.findOne({ _id: payload.userId, schoolId: payload.schoolId, role: 'owner', isActive: true })
+    if (!user) return res.status(401).json({ error: 'Account no longer active' })
+    const school = await School.findById(payload.schoolId).select('isActive')
+    if (!school || school.isActive === false) {
+      return res.status(403).json({ error: 'This school account is disabled' })
+    }
+    req.user = payload
+    next()
+  } catch (err) {
+    next(err)
   }
 }
 
@@ -81,37 +139,19 @@ function requireRole(...allowedRoles) {
     next()
   }
 }
+function requireFeeAccess(req, res, next) {
+  if (req.user.role === 'admin') return next()
 
-// Fees: admin, AMA macalin loo ogolaaday inuu yahay fee manager.
-// Macalinka waxaa DB-ga laga hubiyaa codsi kasta (ma aha token-ka), si
-// marka admin-ku ka qaado fee manager-nimada ay isla markiiba shaqayso,
-// iyo marka macalinka la xidho (isActive false).
-// Waa in la isticmaalaa ka dib `authenticate`.
-async function requireFeeAccess(req, res, next) {
-  try {
-    if (!req.user) return res.status(401).json({ error: 'Not authenticated' })
-    if (req.user.role === 'admin') return next()
-    if (req.user.role === 'teacher' && req.user.teacherId) {
-      // require halkan si aan looga baahnayn models marka file-kan la soo rarayo
-      const { Teacher } = require('../models')
-      const teacher = await Teacher.findOne({
-        _id: req.user.teacherId,
-        schoolId: req.user.schoolId,
-        isActive: true,
-        isFeeManager: true,
-      })
-        .select('_id')
-        .lean()
-      if (teacher) return next()
-    }
-    return res.status(403).json({ error: 'Requires admin or fee manager' })
-  } catch (err) {
-    next(err)
+  if (req.user.role === 'teacher' && req.user.isFeeManager) {
+    return next()
   }
-}
 
+  return res.status(403).json({ error: 'Fee access is required' })
+}
 module.exports = {
   authenticate,
+  authenticateStaffOrOwner,
+  authenticateOwner,
   authenticateStudent,
   authenticateSession,
   requireRole,

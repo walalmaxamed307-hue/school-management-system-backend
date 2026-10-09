@@ -165,3 +165,19 @@ Reconcile this naming in Step 8.
 
 ## Seed (`npm run seed`)
 Seed-ku wuxuu abuuraa KALIYA platform admin-ka (email/password `.env`-ka ka yimaada: `PLATFORM_ADMIN_EMAIL`, `PLATFORM_ADMIN_PASSWORD`). Wax iskuul, admin, macalin ama arday ah ma abuuro, mana tirtiro xog jirta. Iskuullada waxaa abuura platform admin-ka (`platform-admin.html`).
+
+## `/owner-accounts` (admin only) — akoonnada milkiilaha iskuulka
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/` | Liiska owner-yada iskuulka: `[{id, email, isActive, createdAt}]`. |
+| POST | `/` | `{email, password}` (password 8+ xaraf, ≤72 byte). `role='owner'` iyo `schoolId` waxay ka yimaadaan server-ka, ma aha body-ga. Email waa GLOBALLY unique (409 haddii jiro). |
+| PATCH | `/:id` | `{password?}` (reset) iyo/ama `{isActive?}` (joojin/dib u furid). Owner la joojiyay isla markiiba waa dhacaa (DB waa la eegaa wicitaan kasta). |
+| DELETE | `/:id` | Tirtir akoonka. |
+
+## `/owner` (owner only, READ-ONLY)
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/overview` | Xaaladda iskuulka maanta: `school, today, academicYear, totals, newStudents, attendanceToday{before,after}, attendanceByClass, attendancePending, attendanceTrend (14 maalmood), teachersToday, classDistribution, fees, latestExam, risk`. `noActiveYear:true` haddii sanad firfircoon la'yahay. Xogta waalidka looma dirayo owner-ka. `fees.recordedToday` = Fee docs maanta la cusboonaysiiyay (amountPaid waa wadarta bisha, ma aha lacagta wicitaankan keliya). |
+
+**Owner role:** `authenticate` (middleware) wuxuu owner-ka ka diidaa **dhammaan** route-yadii hore (403) — deny-by-default. Owner-ku wuxuu isticmaali karaa kaliya `/owner/*`, `POST /auth/change-password`, `GET /auth/me` iyo `GET /announcements`.
+
