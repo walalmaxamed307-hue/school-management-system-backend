@@ -36,6 +36,9 @@ async function buildStaffProfile(user) {
       teacherId = teacher._id
       profile.name = teacher.fullName
       profile.teacherId = teacher._id
+      // Fee manager-ka waxaa maamula admin-ka. Frontend-ku wuxuu u baahan
+      // yahay flag-kan si menu/route-ka Fees uu ugu furmo macallinka saxda ah.
+      profile.isFeeManager = teacher.isFeeManager === true
 
       // Homeroom scope-ku waa sanad-gaar (year-scoped) — kaliya sanadka
       // ACTIVE ah ayaa la eegaa.

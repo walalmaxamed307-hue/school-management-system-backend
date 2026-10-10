@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken')
-const { User, School } = require('../models')
+const { User, School, Teacher } = require('../models')
 
 function readBearer(req) {
   const header = req.headers.authorization
@@ -139,11 +139,24 @@ function requireRole(...allowedRoles) {
     next()
   }
 }
-function requireFeeAccess(req, res, next) {
+async function requireFeeAccess(req, res, next) {
   if (req.user.role === 'admin') return next()
 
-  if (req.user.role === 'teacher' && req.user.isFeeManager) {
-    return next()
+  // isFeeManager kuma jiro JWT-ga si isbeddelka admin-ku sameeyo uusan
+  // u sugin token cusub (token-ku 7 maalmood ayuu jiri karaa). DB-ga ayaan
+  // ka xaqiijinnaa request kasta oo Fees ah.
+  if (req.user.role === 'teacher') {
+    try {
+      const teacher = await Teacher.findOne({
+        _id: req.user.teacherId,
+        userId: req.user.userId,
+        schoolId: req.user.schoolId,
+        isActive: true,
+      }).select('isFeeManager').lean()
+      if (teacher?.isFeeManager === true) return next()
+    } catch (err) {
+      return next(err)
+    }
   }
 
   return res.status(403).json({ error: 'Fee access is required' })
