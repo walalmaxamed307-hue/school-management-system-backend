@@ -7,21 +7,18 @@
 // rabo xeer kale.
 
 const RISK_CONFIG = {
-  attendanceWindowDays: 30, // attendance-ka sidee u eegtaa: 30-kii maalmood ee la soo dhaafay
-  attendanceMinSessions: 6, // ugu yaraan intaa session oo la calaamadiyay (si aan xog yar loo xukumin)
-  attendanceMinRate: 0.75, // ka hooseeya 75% = khatar
+  attendanceMinAbsencesPerMonth: 5, // bishan 5 maqnaansho ama ka badan = khatar
   feeMinUnpaidMonths: 2, // 2 bilood ama ka badan oo aan la bixin = khatar
   resultMinFailedExams: 2, // 2 imtixaan ama ka badan oo uu "dhacay" = khatar
 }
 
-// Attendance: (present + late) / (present + late + absent). 'excused' waa
-// maqnaansho cudurdaar leh — ma ciqaabayno (laga saaray labada dhinac).
+// Attendance: xeerka iskuulka waa 5 maqnaansho ama ka badan BISHII.
+// 'excused' lama tirinayo maqnaansho; late-na sidoo kale ma aha absent.
 function attendanceSignal({ present = 0, late = 0, absent = 0 }, cfg = RISK_CONFIG) {
   const attended = present + late
   const sessions = attended + absent
-  if (sessions < cfg.attendanceMinSessions) return { flag: false, rate: null, sessions }
-  const rate = attended / sessions
-  return { flag: rate < cfg.attendanceMinRate, rate, sessions }
+  const rate = sessions > 0 ? attended / sessions : null
+  return { flag: absent >= cfg.attendanceMinAbsencesPerMonth, rate, sessions, absent }
 }
 
 // Fees: bilaha "lacag-qaadista" waa kuwa Fee doc leh ugu yaraan hal arday

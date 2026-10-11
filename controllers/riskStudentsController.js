@@ -20,8 +20,7 @@ async function computeRiskStudents(schoolId) {
   const activeYear = await AcademicYear.findOne({ schoolId, status: 'active' })
   const base = {
     thresholds: {
-      attendanceWindowDays: RISK_CONFIG.attendanceWindowDays,
-      attendanceMinRatePercent: Math.round(RISK_CONFIG.attendanceMinRate * 100),
+      attendanceMinAbsencesPerMonth: RISK_CONFIG.attendanceMinAbsencesPerMonth,
       feeMinUnpaidMonths: RISK_CONFIG.feeMinUnpaidMonths,
       resultMinFailedExams: RISK_CONFIG.resultMinFailedExams,
     },
@@ -30,10 +29,9 @@ async function computeRiskStudents(schoolId) {
     return { ...base, academicYear: null, total: 0, highCount: 0, students: [] }
   }
 
-  const since = new Date()
-  since.setHours(0, 0, 0, 0)
-  since.setDate(since.getDate() - RISK_CONFIG.attendanceWindowDays)
-  const currentMonth = new Date().toISOString().slice(0, 7)
+  const now = new Date()
+  const since = new Date(now.getFullYear(), now.getMonth(), 1)
+  const currentMonth = now.toISOString().slice(0, 7)
 
   const [enrollments, attAgg, feeDocs, exams, results, settings] = await Promise.all([
     Enrollment.find({ schoolId, academicYearId: activeYear._id, status: 'active' })
@@ -102,8 +100,8 @@ async function computeRiskStudents(schoolId) {
     if (att.flag) {
       reasons.push({
         type: 'attendance',
-        text: `Attendance hooseeya: ${Math.round(att.rate * 100)}% (${RISK_CONFIG.attendanceWindowDays} maalmood ee ugu dambeeyay)`,
-        rate: Math.round(att.rate * 100),
+        text: `Maqnaansho badan: ${att.absent} jeer bishan`,
+        absentDays: att.absent,
       })
     }
 

@@ -4,17 +4,14 @@
 const { attendanceSignal, feeSignal, resultSignal, riskLevel, RISK_CONFIG } = require('../utils/riskScoring')
 
 describe('attendanceSignal', () => {
-  test('flags below 75% with enough sessions', () => {
-    const s = attendanceSignal({ present: 6, late: 0, absent: 4 }) // 60%
+  test('flags 5 or more absences in the current month', () => {
+    const s = attendanceSignal({ present: 6, late: 0, absent: 5 })
     expect(s.flag).toBe(true)
-    expect(s.rate).toBeCloseTo(0.6)
+    expect(s.absent).toBe(5)
   })
-  test('does not flag at/above 75%', () => {
-    expect(attendanceSignal({ present: 7, late: 1, absent: 2 }).flag).toBe(false) // 80%
-    expect(attendanceSignal({ present: 15, late: 0, absent: 5 }).flag).toBe(false) // exactly 75%
-  })
-  test('too little data -> never flagged', () => {
-    expect(attendanceSignal({ present: 0, late: 0, absent: 5 }).flag).toBe(false) // 5 < 6
+  test('does not flag fewer than 5 absences regardless of rate', () => {
+    expect(attendanceSignal({ present: 0, late: 0, absent: 4 }).flag).toBe(false)
+    expect(attendanceSignal({ present: 1, late: 0, absent: 4 }).flag).toBe(false)
   })
   test('late counts as attended; excused is ignored by the caller', () => {
     expect(attendanceSignal({ present: 0, late: 8, absent: 0 }).rate).toBe(1)
