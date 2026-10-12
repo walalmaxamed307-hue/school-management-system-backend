@@ -93,6 +93,8 @@ async function buildStudentProfile(student) {
     role: 'student',
     schoolId: student.schoolId,
     studentCode: student.studentCode,
+    dob: student.dob ? student.dob.toISOString().slice(0, 10) : null,
+    parentName: student.parentName ?? null,
     enrollmentId: enrollment?._id ?? null,
     class: enrollment?.classId?.name ?? null,
     section: enrollment?.sectionId?.name ?? null,
