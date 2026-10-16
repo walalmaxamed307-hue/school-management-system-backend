@@ -1,5 +1,5 @@
 const mongoose = require('mongoose')
-const { Assignment, AcademicYear, Class, Section, Subject, TeacherAssignment, Enrollment, Teacher } = require('../models')
+const { Assignment, AssignmentView, AcademicYear, Class, Section, Subject, TeacherAssignment, Enrollment, Teacher } = require('../models')
 const storage = require('../services/storage')
 const { inspectFile, displayName, ASSIGNMENT_TYPES } = require('../services/fileRules')
 
@@ -42,7 +42,15 @@ async function list(req, res) {
   for (const key of ['classId', 'sectionId', 'subjectId']) if (req.query[key]) { if (!validId(req.query[key])) return res.status(400).json({ error: `Invalid ${key}` }); filter[key] = req.query[key] }
   if (req.user.role === 'teacher') filter.uploadedByUserId = req.user.userId
   const items = await named(Assignment.find(filter).sort({ createdAt: -1 }).limit(200)).lean()
-  res.json({ items: items.map((item) => dto(item, { canDelete: req.user.role === 'admin' || String(item.uploadedByUserId) === String(req.user.userId) })) })
+  const ids = items.map((item) => item._id)
+  const views = ids.length
+    ? await AssignmentView.aggregate([
+      { $match: { schoolId: new mongoose.Types.ObjectId(req.user.schoolId), assignmentId: { $in: ids } } },
+      { $group: { _id: '$assignmentId', count: { $sum: 1 } } },
+    ])
+    : []
+  const seenCounts = new Map(views.map((view) => [String(view._id), view.count]))
+  res.json({ items: items.map((item) => dto(item, { canDelete: req.user.role === 'admin' || String(item.uploadedByUserId) === String(req.user.userId), seenCount: seenCounts.get(String(item._id)) || 0 })) })
 }
 
 async function create(req, res) {
@@ -87,7 +95,40 @@ async function update(req, res) {
 async function download(req, res) { const item = await staff(req); if (!item || !item.file?.key) return res.status(404).json({ error: 'File lama helin' }); res.json({ url: await storage.signedUrl(item.file.key, { filename: item.file.originalName }), name: item.file.originalName }) }
 async function remove(req, res) { const item = await staff(req); if (!item) return res.status(404).json({ error: 'Assignment lama helin' }); await Assignment.deleteOne({ _id: item._id, schoolId: req.user.schoolId }); await storage.deleteObject(item.file?.key); res.status(204).end() }
 async function mineFilter(req) { const year = await activeYear(req.student.schoolId); if (!year) return null; const enrollment = await Enrollment.findOne({ schoolId: req.student.schoolId, academicYearId: year._id, studentId: req.student.studentId, status: 'active' }).select('classId sectionId').lean(); return enrollment && { schoolId: req.student.schoolId, academicYearId: year._id, classId: enrollment.classId, $or: [{ sectionId: null }, { sectionId: enrollment.sectionId || null }] } }
-async function listMine(req, res) { const filter = await mineFilter(req); res.json(!filter ? [] : (await named(Assignment.find(filter).sort({ createdAt: -1 }).limit(200)).lean()).map(dto)) }
+async function listMine(req, res) {
+  const filter = await mineFilter(req)
+  if (!filter) return res.json([])
+  const items = await named(Assignment.find(filter).sort({ createdAt: -1 }).limit(200)).lean()
+  // GET-ga ardayga wuxuu ka dhigan yahay in posts-kan loo tusay. upsert-ka
+  // unique index ayaa hubinaya in ardayga aan laba jeer lagu tirin.
+  if (items.length) {
+    await AssignmentView.bulkWrite(items.map((item) => ({
+      updateOne: {
+        filter: { assignmentId: item._id, studentId: req.student.studentId },
+        update: { $setOnInsert: { schoolId: req.student.schoolId, assignmentId: item._id, studentId: req.student.studentId } },
+        upsert: true,
+      },
+    })), { ordered: false })
+  }
+  res.json(items.map(dto))
+}
 async function downloadMine(req, res) { const filter = await mineFilter(req); const item = filter && validId(req.params.id) && await Assignment.findOne({ ...filter, _id: req.params.id }).lean(); if (!item || !item.file?.key) return res.status(404).json({ error: 'File lama helin' }); res.json({ url: await storage.signedUrl(item.file.key, { filename: item.file.originalName }), name: item.file.originalName }) }
+async function viewers(req, res) {
+  const item = await staff(req)
+  if (!item) return res.status(404).json({ error: 'Assignment lama helin' })
+  const viewers = await AssignmentView.find({ schoolId: req.user.schoolId, assignmentId: item._id })
+    .populate('studentId', 'fullName studentCode')
+    .sort({ createdAt: -1 })
+    .lean()
+  res.json({
+    count: viewers.length,
+    viewers: viewers.filter((view) => view.studentId).map((view) => ({
+      id: view.studentId._id,
+      name: view.studentId.fullName,
+      studentCode: view.studentId.studentCode,
+      seenAt: view.createdAt,
+    })),
+  })
+}
 
-module.exports = { list, create, update, download, remove, listMine, downloadMine }
+module.exports = { list, create, update, download, remove, listMine, downloadMine, viewers }

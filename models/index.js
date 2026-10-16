@@ -24,5 +24,6 @@ module.exports = {
   Fee: require('./Fee'),
   Homework: require('./Homework'),
   Assignment: require('./Assignment'),
+  AssignmentView: require('./AssignmentView'),
   Counter: require('./Counter'),
 }

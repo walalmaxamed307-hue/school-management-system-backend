@@ -167,4 +167,22 @@ describe('riskStudents controller', () => {
     models.StudentExamResult.find.mockReturnValue(chain([]))
     expect((await run()).total).toBe(0)
   })
+
+  test('attendance risk groups the two daily sessions as one calendar day', async () => {
+    models.Enrollment.find.mockReturnValue(chain([]))
+    models.Attendance.aggregate.mockResolvedValue([])
+    models.Fee.find.mockReturnValue(chain([]))
+    models.Exam.find.mockReturnValue(chain([]))
+    models.StudentExamResult.find.mockReturnValue(chain([]))
+
+    await run()
+
+    const pipeline = models.Attendance.aggregate.mock.calls[0][0]
+    expect(pipeline[1].$group._id).toEqual({
+      enrollmentId: '$enrollmentId', status: '$status', date: '$date',
+    })
+    expect(pipeline[2].$group).toEqual({
+      _id: { enrollmentId: '$_id.enrollmentId', status: '$_id.status' }, count: { $sum: 1 },
+    })
+  })
 })

@@ -41,7 +41,11 @@ async function computeRiskStudents(schoolId) {
       .lean(),
     Attendance.aggregate([
       { $match: { schoolId: schoolObjectId, academicYearId: activeYear._id, date: { $gte: since } } },
-      { $group: { _id: { enrollmentId: '$enrollmentId', status: '$status' }, count: { $sum: 1 } } },
+      // Attendance-ku wuxuu leeyahay laba session maalintii. Marka risk-ka
+      // la xisaabinayo, absent-ka before_break + after_break ee isla date
+      // waa HAL maalin oo maqnaansho ah, ee ma aha laba jeer.
+      { $group: { _id: { enrollmentId: '$enrollmentId', status: '$status', date: '$date' } } },
+      { $group: { _id: { enrollmentId: '$_id.enrollmentId', status: '$_id.status' }, count: { $sum: 1 } } },
     ]),
     Fee.find({ schoolId, academicYearId: activeYear._id })
       .select('enrollmentId month amountDue amountPaid status')
