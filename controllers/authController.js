@@ -18,7 +18,7 @@ const {
 function signStaffToken(user, teacherId) {
   const payload = { userId: user._id, schoolId: user.schoolId, role: user.role }
   if (teacherId) payload.teacherId = teacherId
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' })
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '30d' })
 }
 
 // Profile-ka frontend-ku u isticmaalo session-ka (login iyo /auth/me labadaba).
@@ -154,7 +154,7 @@ async function studentLogin(req, res) {
   const token = jwt.sign(
     { studentId: student._id, schoolId: student.schoolId, scope: 'student' },
     process.env.JWT_SECRET,
-    { expiresIn: '7d' }
+    { expiresIn: '30d' }
   )
   res.json({ token, user: await buildStudentProfile(student) })
 }
