@@ -274,6 +274,17 @@ describe('Exam', () => {
     })
     expect(doc.isFinal).toBe(false)
   })
+  test('split exam requires both part maxima and their exact total', () => {
+    const missingPart = new Exam({ schoolId: oid(), academicYearId: oid(), name: 'Term 1', hasParts: true, examMaxMarkSnapshot: 100 }).validateSync()
+    expect(missingPart.errors.partOneMaxMark).toBeDefined()
+    expect(missingPart.errors.partTwoMaxMark).toBeDefined()
+
+    const wrongTotal = new Exam({ schoolId: oid(), academicYearId: oid(), name: 'Term 1', hasParts: true, partOneMaxMark: 40, partTwoMaxMark: 60, examMaxMarkSnapshot: 90 }).validateSync()
+    expect(wrongTotal.errors.examMaxMarkSnapshot).toBeDefined()
+
+    const valid = new Exam({ schoolId: oid(), academicYearId: oid(), name: 'Term 1', hasParts: true, partOneMaxMark: 40, partTwoMaxMark: 60, examMaxMarkSnapshot: 100 }).validateSync()
+    expect(valid).toBeUndefined()
+  })
 })
 
 describe('StudentExamResult', () => {

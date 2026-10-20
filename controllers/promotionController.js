@@ -52,7 +52,12 @@ async function run(req, res) {
           examId: finalExam._id,
           enrollmentId: enrollment._id,
         })
-        if (result) total = [...result.marks.values()].reduce((sum, m) => sum + (m || 0), 0)
+        // Final Exam parts leh: Part 1 ardaygu wuu arki karaa, balse
+        // dallacsiintu waxay isticmaashaa oo keliya natiijada kama-dambaysta
+        // ah ee Part 2 publish-keedu isku daray.
+        if (result?.published && (!finalExam.hasParts || result.publishedPart === 2)) {
+          total = [...result.marks.values()].reduce((sum, m) => sum + (m || 0), 0)
+        }
       }
       const passed = total >= fromYear.passMarkSnapshot
 

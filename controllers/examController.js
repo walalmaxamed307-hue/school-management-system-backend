@@ -13,8 +13,16 @@ async function list(req, res) {
 // name IS the term (e.g. "Term 1", "Term 2", "Final Exam") — matches how
 // the frontend already treats exams/terms as the same concept.
 async function create(req, res) {
-  const { name, order, isFinal } = req.body
-  if (!name) return res.status(400).json({ error: 'name is required' })
+  const { name, order, isFinal, hasParts, partOneMaxMark, partTwoMaxMark } = req.body
+  const trimmedName = typeof name === 'string' ? name.trim() : ''
+  if (!trimmedName) return res.status(400).json({ error: 'name is required' })
+
+  const splitExam = hasParts === true
+  const partOneMax = Number(partOneMaxMark)
+  const partTwoMax = Number(partTwoMaxMark)
+  if (splitExam && (!Number.isFinite(partOneMax) || !Number.isFinite(partTwoMax) || partOneMax <= 0 || partTwoMax <= 0)) {
+    return res.status(400).json({ error: 'Part 1 and Part 2 marks must both be greater than 0' })
+  }
 
   const activeYear = await AcademicYear.findOne({ schoolId: req.user.schoolId, status: 'active' })
   if (!activeYear) return res.status(400).json({ error: 'No active academic year' })
@@ -23,10 +31,12 @@ async function create(req, res) {
   const exam = await Exam.create({
     schoolId: req.user.schoolId,
     academicYearId: activeYear._id,
-    name,
+    name: trimmedName,
     order: order ?? 0,
     isFinal: !!isFinal,
-    examMaxMarkSnapshot: settings?.defaultExamMaxMark ?? 100,
+    hasParts: splitExam,
+    ...(splitExam ? { partOneMaxMark: partOneMax, partTwoMaxMark: partTwoMax } : {}),
+    examMaxMarkSnapshot: splitExam ? partOneMax + partTwoMax : (settings?.defaultExamMaxMark ?? 100),
   })
   res.status(201).json(exam)
 }

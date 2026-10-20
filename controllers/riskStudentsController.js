@@ -54,7 +54,7 @@ async function computeRiskStudents(schoolId) {
     // Natiijooyinka la daabacay KALIYA — kuwa weli la gelinayo (qayb) ma
     // xukumayno, haddii kale macallin weli marks geliyaa ayaa ardayda "dhacsiin" lahaa.
     StudentExamResult.find({ schoolId, academicYearId: activeYear._id, published: true })
-      .select('enrollmentId examId marks')
+      .select('enrollmentId examId marks publishedPart')
       .lean(),
     SchoolSettings.findOne({ schoolId }).lean(),
   ])
@@ -79,6 +79,9 @@ async function computeRiskStudents(schoolId) {
   const examById = new Map(exams.map((e) => [String(e._id), e]))
   const resultsByEnrollment = new Map()
   for (const r of results) {
+    // Part 1 waa natiijo la arki karo, laakiin risk-ka term-ka kama
+    // dambaysta ahi ma xukumo ilaa Part 2 uu isku darka publish-gareeyo.
+    if (r.publishedPart === 1) continue
     const values = Object.values(r.marks || {})
     const key = String(r.enrollmentId)
     if (!resultsByEnrollment.has(key)) resultsByEnrollment.set(key, [])

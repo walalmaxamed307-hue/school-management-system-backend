@@ -16,8 +16,17 @@ const studentExamResultSchema = new mongoose.Schema(
     classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
     sectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Section' },
     marks: { type: Map, of: Number, default: {} }, // subjectId (string) -> mark
+    // Waxaa loo isticmaalaa keliya exam.hasParts=true. `marks` wuxuu sii
+    // ahaanayaa natiijada kama-dambaysta ah (Part 1 + Part 2), si reports,
+    // risk iyo promotion-kii hore aysan u jabin.
+    partOneMarks: { type: Map, of: Number, default: {} },
+    partTwoMarks: { type: Map, of: Number, default: {} },
     maxMarkSnapshot: { type: Number, required: true },
     published: { type: Boolean, default: false },
+    // Split exam: 1 = Part 1 ayaa la publish-gareeyay, 2 = Part 1 + Part 2
+    // ayaa la isku daray oo la publish-gareeyay. Exam caadi ah wuxuu sii
+    // isticmaalaa `published` oo keliya (publishedPart=null).
+    publishedPart: { type: Number, enum: [1, 2], default: null },
     publishedAt: { type: Date },
     publishedByUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },

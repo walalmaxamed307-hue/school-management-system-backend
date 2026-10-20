@@ -98,6 +98,21 @@ function computeRankings(rows) {
   return sorted.map((row, i) => ({ ...row, rank: i + 1 }))
 }
 
+function marksObject(marks) {
+  return marks ? Object.fromEntries(marks) : {}
+}
+
+// Part 2 publish ayaa halkan ka sameeya natiijada subject kasta: Part 1 +
+// Part 2. Subjects hal qayb keliya laga geliyeyna qiimahooda jira ayaa la
+// hayaa; wax dhibco been ah lama abuuro.
+function combinePartMarks(partOne, partTwo) {
+  const combined = {}
+  for (const subjectId of new Set([...Object.keys(partOne), ...Object.keys(partTwo)])) {
+    combined[subjectId] = (partOne[subjectId] || 0) + (partTwo[subjectId] || 0)
+  }
+  return combined
+}
+
 async function getResults(req, res) {
   const { classId, sectionId } = req.query
   if (!classId) return res.status(400).json({ error: 'classId is required' })
@@ -106,6 +121,10 @@ async function getResults(req, res) {
 
   const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
   if (!exam) return res.status(404).json({ error: 'Exam not found' })
+  const inputPart = exam.hasParts ? (String(req.query.part) === '2' ? 2 : 1) : null
+  const inputMaxMark = exam.hasParts
+    ? (inputPart === 1 ? exam.partOneMaxMark : exam.partTwoMaxMark)
+    : exam.examMaxMarkSnapshot
 
   if (!(await canViewResults(req, classId, sectionId))) {
     return res.status(403).json({ error: 'You are not the homeroom teacher or an assigned subject teacher for this class/section' })
@@ -143,29 +162,78 @@ async function getResults(req, res) {
       enrollmentId: e._id,
       studentId: e.studentId._id,
       name: e.studentId.fullName,
-      marks: result ? Object.fromEntries(result.marks) : {},
+      marks: result
+        ? (exam.hasParts ? marksObject(inputPart === 1 ? result.partOneMarks : result.partTwoMarks) : marksObject(result.marks))
+        : {},
       published: result?.published ?? false,
+      publishedPart: result?.publishedPart ?? (result?.published ? 2 : null),
     }
   })
   const ranked = computeRankings(rows)
+  const allPublished = ranked.length > 0 && ranked.every((r) => exam.hasParts ? r.publishedPart === 2 : r.published)
+
+  // Part 2 publish ka dib teacher-ku wuxuu u baahan yahay isla xogta uu
+  // ardaygu arko: subject kasta Part 1 + Part 2, total iyo kaalinta ku
+  // salaysan wadartaas. Raw Part 2 marks weli `marks` ayay ku jiraan si Edit
+  // uu ugu shaqeeyo xadka Part 2 oo keliya.
+  let responseRows = ranked
+  if (exam.hasParts && allPublished) {
+    const combinedRanked = computeRankings(enrollments.map((e) => {
+      const result = resultByEnrollmentId[String(e._id)]
+      return {
+        enrollmentId: e._id,
+        marks: marksObject(result?.marks),
+      }
+    }))
+    const combinedByEnrollment = new Map(combinedRanked.map((row) => [String(row.enrollmentId), row]))
+    responseRows = ranked.map((row) => {
+      const combined = combinedByEnrollment.get(String(row.enrollmentId))
+      return {
+        ...row,
+        combinedMarks: combined?.marks ?? {},
+        combinedTotal: combined?.total ?? 0,
+        combinedRank: combined?.rank ?? 0,
+      }
+    })
+  }
 
   res.json({
-    exam: { id: exam._id, name: exam.name, isFinal: exam.isFinal, examMaxMark: exam.examMaxMarkSnapshot },
+    exam: {
+      id: exam._id,
+      name: exam.name,
+      isFinal: exam.isFinal,
+      examMaxMark: exam.examMaxMarkSnapshot,
+      hasParts: exam.hasParts,
+      partOneMaxMark: exam.partOneMaxMark ?? null,
+      partTwoMaxMark: exam.partTwoMaxMark ?? null,
+      inputPart,
+      inputMaxMark,
+    },
     isCurrentYear,
-    allPublished: ranked.length > 0 && ranked.every((r) => r.published),
+    // Part 1 waa la publish-gareyn karaa, balse "allPublished" wuxuu
+    // micnihiisu yahay final-ka term-ka: Part 2 (iyo isku darka) waa dhammaatay.
+    allPublished,
+    partOnePublished: exam.hasParts && ranked.length > 0 && ranked.every((r) => r.publishedPart === 1 || r.publishedPart === 2),
     canPublish: isCurrentYear && (await canPublish(req, classId, sectionId)),
-    rows: ranked,
+    rows: responseRows,
   })
 }
 
 async function putMark(req, res) {
-  const { enrollmentId, subjectId, mark } = req.body
+  const { enrollmentId, subjectId, mark, part } = req.body
   if (!enrollmentId || !subjectId || mark === undefined) {
     return res.status(400).json({ error: 'enrollmentId, subjectId, and mark are required' })
   }
 
   const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
   if (!exam) return res.status(404).json({ error: 'Exam not found' })
+  const inputPart = exam.hasParts ? Number(part) : null
+  if (exam.hasParts && ![1, 2].includes(inputPart)) {
+    return res.status(400).json({ error: 'Part 1 or Part 2 is required for this exam' })
+  }
+  const inputMaxMark = exam.hasParts
+    ? (inputPart === 1 ? exam.partOneMaxMark : exam.partTwoMaxMark)
+    : exam.examMaxMarkSnapshot
 
   const activeYear = await getActiveYear(req.user.schoolId)
   if (String(exam.academicYearId) !== String(activeYear?._id)) {
@@ -182,8 +250,8 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
   const subject = await Subject.findOne({ _id: subjectId, schoolId: req.user.schoolId })
   if (!subject) return res.status(404).json({ error: 'Subject not found' })
 
-  if (typeof mark !== 'number' || !Number.isFinite(mark) || mark < 0 || mark > exam.examMaxMarkSnapshot) {
-    return res.status(400).json({ error: `mark must be between 0 and ${exam.examMaxMarkSnapshot}` })
+  if (typeof mark !== 'number' || !Number.isFinite(mark) || mark < 0 || mark > inputMaxMark) {
+    return res.status(400).json({ error: `mark must be between 0 and ${inputMaxMark}` })
   }
   if (!(await canEditSubject(req, enrollment.classId, enrollment.sectionId, subjectId))) {
     return res.status(403).json({ error: 'You are not assigned to teach this subject for this class/section' })
@@ -210,9 +278,14 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
       maxMarkSnapshot: exam.examMaxMarkSnapshot,
     })
   }
-  result.marks.set(String(subjectId), mark)
+  if (exam.hasParts) {
+    const target = inputPart === 1 ? result.partOneMarks : result.partTwoMarks
+    target.set(String(subjectId), mark)
+  } else {
+    result.marks.set(String(subjectId), mark)
+  }
   await result.save()
-  res.json({ ...result.toObject(), marks: Object.fromEntries(result.marks) })
+  res.json({ ...result.toObject(), marks: exam.hasParts ? marksObject(inputPart === 1 ? result.partOneMarks : result.partTwoMarks) : marksObject(result.marks) })
 }
 
 // Isla "publishClass" ee frontend-ku lahaa: dhammaan ardayda la doortay
@@ -220,13 +293,17 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
 // StudentExamResult lahayn weli wuxuu helayaa mid madhan (marks: {}) oo
 // la publish gareeyay, isla sida frontend-ku u sameeyo.
 async function publish(req, res) {
-  const { classId, sectionId } = req.body
+  const { classId, sectionId, part } = req.body
   if (!classId) return res.status(400).json({ error: 'classId is required' })
   const sectionCheck = await requireSectionIfNeeded(req.user.schoolId, classId, sectionId)
   if (sectionCheck) return res.status(sectionCheck.status).json({ error: sectionCheck.error })
 
   const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
   if (!exam) return res.status(404).json({ error: 'Exam not found' })
+  const publishingPart = exam.hasParts ? Number(part) : null
+  if (exam.hasParts && ![1, 2].includes(publishingPart)) {
+    return res.status(400).json({ error: 'Part 1 ama Part 2 dooro ka hor publish' })
+  }
 
   const activeYear = await getActiveYear(req.user.schoolId)
   if (String(exam.academicYearId) !== String(activeYear?._id)) {
@@ -245,6 +322,17 @@ async function publish(req, res) {
   })
 
   for (const enrollment of enrollments) {
+    const existing = exam.hasParts
+      ? await StudentExamResult.findOne({ schoolId: req.user.schoolId, examId: exam._id, enrollmentId: enrollment._id })
+      : null
+    const partOneMarks = marksObject(existing?.partOneMarks)
+    const partTwoMarks = marksObject(existing?.partTwoMarks)
+    const publishedMarks = exam.hasParts
+      ? (publishingPart === 1 ? partOneMarks : combinePartMarks(partOneMarks, partTwoMarks))
+      : null
+    const publishedMaxMark = exam.hasParts
+      ? (publishingPart === 1 ? exam.partOneMaxMark : exam.examMaxMarkSnapshot)
+      : null
     await StudentExamResult.findOneAndUpdate(
       { schoolId: req.user.schoolId, examId: exam._id, enrollmentId: enrollment._id },
       {
@@ -255,9 +343,13 @@ async function publish(req, res) {
           examId: exam._id,
           classId: enrollment.classId,
           sectionId: enrollment.sectionId,
-          maxMarkSnapshot: exam.examMaxMarkSnapshot,
+          // Split exam-ka maxMarkSnapshot-ka Part 1/Part 2 ayaa $set-ka
+          // hoose ku imanaya. Hal update gudaheed isla field laba operator
+          // looma qori karo (MongoDB 500 ayuu ku tuuraa).
+          ...(!exam.hasParts ? { maxMarkSnapshot: exam.examMaxMarkSnapshot } : {}),
         },
         $set: {
+          ...(exam.hasParts ? { marks: publishedMarks, maxMarkSnapshot: publishedMaxMark, publishedPart: publishingPart } : {}),
           published: true,
           publishedAt: new Date(),
           publishedByUserId: req.user.userId,
