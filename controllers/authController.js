@@ -18,7 +18,19 @@ const {
 function signStaffToken(user, teacherId) {
   const payload = { userId: user._id, schoolId: user.schoolId, role: user.role }
   if (teacherId) payload.teacherId = teacherId
-  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '30d' })
+  return jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '7d' })
+}
+
+function signStudentToken(student, scope = 'student') {
+  return jwt.sign(
+    { studentId: student._id, schoolId: student.schoolId, scope },
+    process.env.JWT_SECRET,
+    { expiresIn: scope === 'student_pin_setup' ? '10m' : '7d' }
+  )
+}
+
+function validPin(pin) {
+  return typeof pin === 'string' && /^\d{4,6}$/.test(pin)
 }
 
 // Profile-ka frontend-ku u isticmaalo session-ka (login iyo /auth/me labadaba).
@@ -98,6 +110,7 @@ async function buildStudentProfile(student) {
     enrollmentId: enrollment?._id ?? null,
     class: enrollment?.classId?.name ?? null,
     section: enrollment?.sectionId?.name ?? null,
+    needsPinSetup: !student.pinHash,
   }
 }
 
@@ -126,37 +139,75 @@ async function login(req, res) {
   res.json({ token: signStaffToken(user, teacherId), user: profile })
 }
 
-// Ardaygu ma laha password. Wuxuu isticmaalaa studentCode + taariikhda
-// dhalashada (dob). studentCode wuu is-raacaa (STU-000123) marka ID-ga
-// kaligiis ma aha xaddaysan (guessable) — DOB ayaa noqonaya qaybta labaad.
-// Jawaab qaldan waa isku mid (ma sheegayo midka khaldan) si aan loo
-// qiyaasin karin.
+// Gelitaanka koowaad: Student ID keliya wuxuu furayaa token 10-daqiiqo ah
+// oo loogu talagalay PIN setup oo keliya. Markuu PIN jiro, ID + PIN ayaa
+// loo baahan yahay; setup token-ka ma geli karo student endpoints.
 async function studentLogin(req, res) {
-  const { studentCode, dob } = req.body
-  if (typeof studentCode !== 'string' || typeof dob !== 'string' || !studentCode || !dob) {
-    return res.status(400).json({ error: 'studentCode and dob are required' })
+  const { studentCode, pin } = req.body
+  if (typeof studentCode !== 'string' || !studentCode) {
+    return res.status(400).json({ error: 'studentCode is required' })
   }
-  const fail = () => res.status(401).json({ error: 'Student ID ama taariikhda dhalashada waa qaldan' })
+  const fail = () => res.status(401).json({ error: 'Student ID ama PIN waa qaldan' })
 
   const student = await Student.findOne({
     studentCode: studentCode.trim().toUpperCase(),
     lifecycleStatus: 'active',
-  })
-  if (!student || !student.dob) return fail()
-
-  // dob waxaa lagu kaydiyaa Date (UTC) — isbarbardhig YYYY-MM-DD ah.
-  if (student.dob.toISOString().slice(0, 10) !== dob.trim().slice(0, 10)) return fail()
+  }).select('+pinHash')
+  if (!student) return fail()
 
   if (!(await schoolIsActive(student.schoolId))) {
     return res.status(403).json({ error: 'This school account is disabled' })
   }
 
-  const token = jwt.sign(
-    { studentId: student._id, schoolId: student.schoolId, scope: 'student' },
-    process.env.JWT_SECRET,
-    { expiresIn: '30d' }
-  )
-  res.json({ token, user: await buildStudentProfile(student) })
+  if (!student.pinHash) {
+    return res.json({ token: signStudentToken(student, 'student_pin_setup'), user: await buildStudentProfile(student), needsPinSetup: true })
+  }
+  if (!validPin(pin) || !(await bcrypt.compare(pin, student.pinHash))) return fail()
+  res.json({ token: signStudentToken(student), user: await buildStudentProfile(student), needsPinSetup: false })
+}
+
+async function setStudentPin(req, res) {
+  if (req.student?.scope !== 'student_pin_setup') return res.status(403).json({ error: 'PIN setup token is required' })
+  const { pin, confirmPin } = req.body || {}
+  if (!validPin(pin)) return res.status(400).json({ error: 'PIN-ku waa inuu noqdaa 4 ilaa 6 lambar' })
+  if (pin !== confirmPin) return res.status(400).json({ error: 'Labada PIN isma laha' })
+  const student = await Student.findOne({ _id: req.student.studentId, schoolId: req.student.schoolId, lifecycleStatus: 'active' }).select('+pinHash')
+  if (!student) return res.status(401).json({ error: 'Account no longer active' })
+  if (student.pinHash) return res.status(409).json({ error: 'PIN hore ayaa loo sameeyay; ku gal Student ID + PIN' })
+  student.pinHash = await bcrypt.hash(pin, 10)
+  student.pinSetAt = new Date()
+  await student.save()
+  res.json({ token: signStudentToken(student), user: await buildStudentProfile(student) })
+}
+
+// Staff-ku PIN-ka ma akhrin karo (hash keliya ayaa DB-ga ku jira). Haddii
+// ardaygu illoobo, admin ama macalin u xilsaaran fasalkiisa ayaa dejin kara
+// PIN cusub oo uu ardayga u sheegayo.
+async function resetStudentPin(req, res) {
+  const { pin } = req.body || {}
+  if (!validPin(pin)) return res.status(400).json({ error: 'PIN-ku waa inuu noqdaa 4 ilaa 6 lambar' })
+  const student = await Student.findOne({ _id: req.params.id, schoolId: req.user.schoolId, lifecycleStatus: 'active' }).select('+pinHash')
+  if (!student) return res.status(404).json({ error: 'Student not found' })
+
+  if (req.user.role === 'teacher') {
+    if (!req.user.teacherId) return res.status(403).json({ error: 'Teacher access is required' })
+    const activeYear = await AcademicYear.findOne({ schoolId: req.user.schoolId, status: 'active' })
+    const enrollment = activeYear && await Enrollment.findOne({ schoolId: req.user.schoolId, academicYearId: activeYear._id, studentId: student._id, status: 'active' })
+    if (!enrollment) return res.status(403).json({ error: 'Student is not in the active year' })
+    const assignment = await TeacherAssignment.findOne({
+      schoolId: req.user.schoolId,
+      academicYearId: activeYear._id,
+      teacherId: req.user.teacherId,
+      classId: enrollment.classId,
+      $or: [{ sectionId: null }, { sectionId: enrollment.sectionId ?? null }],
+    })
+    if (!assignment) return res.status(403).json({ error: 'You are not assigned to this student\'s class' })
+  }
+
+  student.pinHash = await bcrypt.hash(pin, 10)
+  student.pinSetAt = new Date()
+  await student.save()
+  res.json({ ok: true })
 }
 
 // Session restore (page refresh): token-ka ayaa la hubiyaa oo profile-ka
@@ -167,8 +218,9 @@ async function me(req, res) {
       _id: req.student.studentId,
       schoolId: req.student.schoolId,
       lifecycleStatus: 'active',
-    })
+    }).select('+pinHash')
     if (!student) return res.status(401).json({ error: 'Account no longer active' })
+    if (req.student.scope === 'student_pin_setup' && student.pinHash) return res.status(401).json({ error: 'PIN setup has already been completed' })
     return res.json({ user: await buildStudentProfile(student) })
   }
 
@@ -238,4 +290,4 @@ async function changePassword(req, res) {
   res.json({ ok: true })
 }
 
-module.exports = { login, studentLogin, me, changePassword, validatePasswordChange }
+module.exports = { login, studentLogin, setStudentPin, resetStudentPin, me, changePassword, validatePasswordChange }

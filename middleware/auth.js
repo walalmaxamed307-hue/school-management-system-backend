@@ -116,7 +116,7 @@ function authenticateSession(req, res, next) {
   }
   try {
     const payload = jwt.verify(token, process.env.JWT_SECRET)
-    if (payload.scope === 'student') {
+    if (payload.scope === 'student' || payload.scope === 'student_pin_setup') {
       req.student = payload
     } else if (!payload.scope && payload.userId && payload.schoolId) {
       req.user = payload

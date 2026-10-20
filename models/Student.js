@@ -9,6 +9,9 @@ const studentSchema = new mongoose.Schema(
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
     studentCode: { type: String, required: true, trim: true },
     fullName: { type: String, required: true, trim: true },
+    // PIN-ka plain text lama kaydiyo; hash keliya ayaa jira.
+    pinHash: { type: String, select: false },
+    pinSetAt: { type: Date },
     dob: { type: Date },
     parentName: { type: String, trim: true },
     parentPhone: { type: String, trim: true },
