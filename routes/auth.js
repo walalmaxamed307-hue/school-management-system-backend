@@ -1,5 +1,5 @@
 const express = require('express')
-const { login, studentLogin, setStudentPin, me, changePassword } = require('../controllers/authController')
+const { login, studentLogin, studentLookup, setStudentPin, me, changePassword } = require('../controllers/authController')
 const { authenticateStaffOrOwner, authenticateSession } = require('../middleware/auth')
 const asyncHandler = require('../middleware/asyncHandler')
 const { loginLimiter, changePasswordLimiter } = require('../middleware/security')
@@ -8,6 +8,7 @@ const router = express.Router()
 
 router.post('/login', loginLimiter, asyncHandler(login))
 router.post('/student-login', loginLimiter, asyncHandler(studentLogin))
+router.post('/student-lookup', loginLimiter, asyncHandler(studentLookup))
 // authenticateSession wuxuu aqbalaa setup token-ka; controller-ku wuxuu si
 // cad u xaqiijiyaa scope=student_pin_setup. Student endpoints-ka kale weli
 // authenticateStudent ayay isticmaalaan oo setup token ma geli karo.

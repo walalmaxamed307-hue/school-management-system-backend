@@ -166,6 +166,24 @@ async function studentLogin(req, res) {
   res.json({ token: signStudentToken(student), user: await buildStudentProfile(student), needsPinSetup: false })
 }
 
+// Login-ka laba tallaabo ah: Student ID sax ah wuxuu soo celiyaa magaca iyo
+// in PIN hore u jiro iyo in kale. Token ama xog kale lama bixinayo halkan;
+// portal-ka waxaa geli kara keliya /student-login oo PIN sax ah leh.
+async function studentLookup(req, res) {
+  const { studentCode } = req.body || {}
+  if (typeof studentCode !== 'string' || !studentCode.trim()) {
+    return res.status(400).json({ error: 'studentCode is required' })
+  }
+  const student = await Student.findOne({
+    studentCode: studentCode.trim().toUpperCase(),
+    lifecycleStatus: 'active',
+  }).select('fullName schoolId +pinHash')
+  if (!student || !(await schoolIsActive(student.schoolId))) {
+    return res.status(404).json({ error: 'Student ID lama helin' })
+  }
+  res.json({ name: student.fullName, needsPinSetup: !student.pinHash })
+}
+
 async function setStudentPin(req, res) {
   if (req.student?.scope !== 'student_pin_setup') return res.status(403).json({ error: 'PIN setup token is required' })
   const { pin, confirmPin } = req.body || {}
@@ -290,4 +308,4 @@ async function changePassword(req, res) {
   res.json({ ok: true })
 }
 
-module.exports = { login, studentLogin, setStudentPin, resetStudentPin, me, changePassword, validatePasswordChange }
+module.exports = { login, studentLogin, studentLookup, setStudentPin, resetStudentPin, me, changePassword, validatePasswordChange }

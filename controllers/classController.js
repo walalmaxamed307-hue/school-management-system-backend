@@ -80,13 +80,13 @@ async function addSection(req, res) {
 
 async function removeSection(req, res) {
   const { sectionId } = req.params
-  const [enrolled, homeroom] = await Promise.all([
-    Enrollment.exists({ schoolId: req.user.schoolId, sectionId }),
+  const [homeroom, teaching] = await Promise.all([
     TeacherAttendanceScope.exists({ schoolId: req.user.schoolId, sectionId }),
+    TeacherAssignment.exists({ schoolId: req.user.schoolId, sectionId }),
   ])
-  if (enrolled || homeroom) {
+  if (homeroom || teaching) {
     return res.status(409).json({
-      error: 'Cannot delete a section that has enrollments or a homeroom teacher assigned to it',
+      error: 'Cannot delete a section assigned to a teacher — reassign the teacher first',
     })
   }
   const section = await Section.findOneAndDelete({
@@ -95,6 +95,15 @@ async function removeSection(req, res) {
     classId: req.params.id,
   })
   if (!section) return res.status(404).json({ error: 'Section not found' })
+
+  // Ardayda section-ka la tirtiray ma luminayaan enrollment-kooda; waxay
+  // ku noqdaan kooxda aan section-ka lahayn ee isla fasalka. updateMany
+  // ayaa halkan ula kac ah: fasal sections leh wuxuu oggol yahay xaaladdan
+  // ku-meelgaarka ah si admin-ku ugu qaybiyo ardayda mar dambe.
+  await Enrollment.updateMany(
+    { schoolId: req.user.schoolId, sectionId },
+    { $set: { sectionId: null } }
+  )
 
   // Marka section-kii ugu dambeeyay la tiro, fasalku wuxuu ku laabanayaa
   // fasal CAADI ah (hasSections=false) — haddii kale wuxuu sii haysan lahaa

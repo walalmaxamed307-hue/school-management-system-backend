@@ -5,9 +5,12 @@ const { Exam, Class, Room, Enrollment, RoomAssignment } = require('../models')
 // si isku mid ah loogu qaybiyaa rooms-ka la doortay, iyada oo aan sections
 // la eegayn (room-ku waa pool guud, sida hore loo go'aamiyay).
 async function split(req, res) {
-  const { classIds, roomIds } = req.body
+  const { classIds, roomIds, attendanceDate } = req.body
   if (!Array.isArray(classIds) || classIds.length === 0 || !Array.isArray(roomIds) || roomIds.length === 0) {
     return res.status(400).json({ error: 'classIds and roomIds must be non-empty arrays' })
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(attendanceDate || '')) || Number.isNaN(new Date(`${attendanceDate}T00:00:00`).getTime())) {
+    return res.status(400).json({ error: 'attendanceDate must be YYYY-MM-DD' })
   }
 
   const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
@@ -32,6 +35,7 @@ async function split(req, res) {
   await RoomAssignment.deleteMany({
     schoolId: req.user.schoolId,
     examId: exam._id,
+    attendanceDate,
     enrollmentId: { $in: enrollments.map((e) => e._id) },
   })
 
@@ -40,6 +44,7 @@ async function split(req, res) {
     schoolId: req.user.schoolId,
     academicYearId: exam.academicYearId,
     examId: exam._id,
+    attendanceDate,
     enrollmentId: enrollment._id,
     roomId: roomIds[i % roomIds.length],
   }))
@@ -52,7 +57,9 @@ async function getSplit(req, res) {
   const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
   if (!exam) return res.status(404).json({ error: 'Exam not found' })
 
-  const assignments = await RoomAssignment.find({ schoolId: req.user.schoolId, examId: exam._id })
+  const attendanceDate = req.query.date
+  const dateFilter = attendanceDate ? { attendanceDate } : {}
+  const assignments = await RoomAssignment.find({ schoolId: req.user.schoolId, examId: exam._id, ...dateFilter })
     .populate('roomId', 'name')
     .populate({ path: 'enrollmentId', populate: { path: 'studentId', select: 'fullName studentCode' } })
     .lean()
@@ -75,7 +82,7 @@ async function getSplit(req, res) {
 // Wax-ka-beddel hal arday: guuri room kale ama calaamadi present/absent
 // maalinta imtixaanka. Mid keliya oo kasta — ma aha dhammaan fasalka.
 async function update(req, res) {
-  const { roomId, examStatus } = req.body
+  const { roomId, examStatus, attendanceDate } = req.body
   if (roomId === undefined && examStatus === undefined) {
     return res.status(400).json({ error: 'roomId or examStatus is required' })
   }
@@ -85,6 +92,9 @@ async function update(req, res) {
 
   const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
   if (!exam) return res.status(404).json({ error: 'Exam not found' })
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(attendanceDate || '')) || Number.isNaN(new Date(`${attendanceDate}T00:00:00`).getTime())) {
+    return res.status(400).json({ error: 'attendanceDate must be YYYY-MM-DD' })
+  }
 
   const enrollment = await Enrollment.findOne({ _id: req.params.enrollmentId, schoolId: req.user.schoolId })
   if (!enrollment) return res.status(404).json({ error: 'Enrollment not found' })
@@ -94,6 +104,7 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
   let assignment = await RoomAssignment.findOne({
     schoolId: req.user.schoolId,
     examId: exam._id,
+    attendanceDate,
     enrollmentId: req.params.enrollmentId,
   })
 
@@ -110,6 +121,7 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
       schoolId: req.user.schoolId,
       academicYearId: exam.academicYearId,
       examId: exam._id,
+      attendanceDate,
       enrollmentId: enrollment._id,
       roomId: room._id,
       examStatus: examStatus ?? undefined,

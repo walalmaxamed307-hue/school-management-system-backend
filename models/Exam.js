@@ -9,6 +9,10 @@ const examSchema = new mongoose.Schema(
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
     academicYearId: { type: mongoose.Schema.Types.ObjectId, ref: 'AcademicYear', required: true },
     name: { type: String, required: true, trim: true }, // e.g. "First Term"
+    // This is the actual date used for the exam-room attendance. Keeping it
+    // on the exam lets staff open a previous room split without guessing from
+    // the record creation timestamp.
+    examDate: { type: Date },
     order: { type: Number, required: true, default: 0 },
     isFinal: { type: Boolean, default: false },
     status: { type: String, required: true, enum: ['draft', 'open', 'closed'], default: 'draft' },
