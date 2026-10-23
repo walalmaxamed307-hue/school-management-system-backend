@@ -1,4 +1,4 @@
-const { Exam, AcademicYear, SchoolSettings, StudentExamResult, RoomAssignment } = require('../models')
+const { Exam, AcademicYear, SchoolSettings, StudentExamResult, RoomAssignment, RoomAttendance } = require('../models')
 
 async function list(req, res) {
   const academicYearId = req.query.academicYearId
@@ -13,13 +13,9 @@ async function list(req, res) {
 // name IS the term (e.g. "Term 1", "Term 2", "Final Exam") — matches how
 // the frontend already treats exams/terms as the same concept.
 async function create(req, res) {
-  const { name, order, isFinal, hasParts, partOneMaxMark, partTwoMaxMark, examDate } = req.body
+  const { name, order, isFinal, hasParts, partOneMaxMark, partTwoMaxMark } = req.body
   const trimmedName = typeof name === 'string' ? name.trim() : ''
   if (!trimmedName) return res.status(400).json({ error: 'name is required' })
-  const parsedExamDate = examDate ? new Date(examDate) : null
-  if (examDate && Number.isNaN(parsedExamDate.getTime())) {
-    return res.status(400).json({ error: 'examDate is not a valid date' })
-  }
 
   const splitExam = hasParts === true
   const partOneMax = Number(partOneMaxMark)
@@ -36,9 +32,6 @@ async function create(req, res) {
     schoolId: req.user.schoolId,
     academicYearId: activeYear._id,
     name: trimmedName,
-    // Clients may provide an exam date. If they do not, use the real day the
-    // exam is created so room-attendance history is still dated correctly.
-    examDate: parsedExamDate || new Date(),
     order: order ?? 0,
     isFinal: !!isFinal,
     hasParts: splitExam,
@@ -59,6 +52,7 @@ async function remove(req, res) {
 
   await StudentExamResult.deleteMany({ schoolId: req.user.schoolId, examId: exam._id })
   await RoomAssignment.deleteMany({ schoolId: req.user.schoolId, examId: exam._id })
+  await RoomAttendance.deleteMany({ schoolId: req.user.schoolId, examId: exam._id })
   await Exam.deleteOne({ _id: exam._id })
   res.status(204).end()
 }

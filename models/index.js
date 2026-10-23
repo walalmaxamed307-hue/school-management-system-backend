@@ -16,6 +16,7 @@ module.exports = {
   StudentExamResult: require('./StudentExamResult'),
   Room: require('./Room'),
   RoomAssignment: require('./RoomAssignment'),
+  RoomAttendance: require('./RoomAttendance'),
   PromotionRecommendation: require('./PromotionRecommendation'),
   Announcement: require('./Announcement'),
   StudentTransfer: require('./StudentTransfer'),
