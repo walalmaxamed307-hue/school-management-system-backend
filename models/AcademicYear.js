@@ -26,5 +26,7 @@ const academicYearSchema = new mongoose.Schema(
 )
 
 academicYearSchema.index({ schoolId: 1, startYear: 1 }, { unique: true })
+// Used on every dashboard load to find the current year.
+academicYearSchema.index({ schoolId: 1, status: 1 })
 
 module.exports = mongoose.model('AcademicYear', academicYearSchema)

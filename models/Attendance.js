@@ -26,5 +26,7 @@ const attendanceSchema = new mongoose.Schema(
 attendanceSchema.index({ schoolId: 1, enrollmentId: 1, date: 1, session: 1 }, { unique: true })
 attendanceSchema.index({ schoolId: 1, academicYearId: 1, classId: 1, sectionId: 1, date: 1 })
 attendanceSchema.index({ schoolId: 1, enrollmentId: 1 })
+// Dashboard aggregates today's records and the previous 14 days by session/status.
+attendanceSchema.index({ schoolId: 1, date: 1, session: 1, status: 1 })
 
 module.exports = mongoose.model('Attendance', attendanceSchema)

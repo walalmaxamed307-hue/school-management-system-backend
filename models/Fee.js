@@ -27,5 +27,8 @@ const feeSchema = new mongoose.Schema(
 feeSchema.index({ schoolId: 1, enrollmentId: 1, month: 1 }, { unique: true })
 feeSchema.index({ schoolId: 1, academicYearId: 1, status: 1 })
 feeSchema.index({ schoolId: 1, academicYearId: 1, classId: 1, sectionId: 1, month: 1 })
+// Dashboard totals this month's collections and fee status without scanning other months.
+feeSchema.index({ schoolId: 1, month: 1 })
+feeSchema.index({ schoolId: 1, academicYearId: 1, month: 1 })
 
 module.exports = mongoose.model('Fee', feeSchema)

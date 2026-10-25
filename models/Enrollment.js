@@ -71,5 +71,7 @@ enrollmentSchema.pre('validate', async function validateSection(next) {
 enrollmentSchema.index({ schoolId: 1, academicYearId: 1, studentId: 1 }, { unique: true })
 enrollmentSchema.index({ schoolId: 1, academicYearId: 1, classId: 1 })
 enrollmentSchema.index({ schoolId: 1, academicYearId: 1, classId: 1, sectionId: 1 })
+// Used by the dashboard fee summary for active-year students.
+enrollmentSchema.index({ schoolId: 1, academicYearId: 1, status: 1 })
 
 module.exports = mongoose.model('Enrollment', enrollmentSchema)

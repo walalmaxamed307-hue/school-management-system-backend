@@ -16,5 +16,6 @@ const teacherSchema = new mongoose.Schema(
 )
 
 teacherSchema.index({ schoolId: 1, userId: 1 }, { unique: true })
+teacherSchema.index({ schoolId: 1, isActive: 1 })
 
 module.exports = mongoose.model('Teacher', teacherSchema)
