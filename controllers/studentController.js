@@ -131,8 +131,8 @@ async function update(req, res) {
     if (!EDITABLE_STATUSES.includes(lifecycleStatus)) {
       return res.status(400).json({ error: 'Use POST /students/:id/transfer to transfer a student' })
     }
-    if (['graduated', 'transferred'].includes(student.lifecycleStatus)) {
-      return res.status(400).json({ error: `A ${student.lifecycleStatus} student's status cannot be changed` })
+    if (student.lifecycleStatus === 'transferred') {
+      return res.status(400).json({ error: 'A transferred student\'s status cannot be changed' })
     }
   }
 
