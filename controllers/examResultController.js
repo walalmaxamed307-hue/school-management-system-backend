@@ -250,7 +250,7 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
   const subject = await Subject.findOne({ _id: subjectId, schoolId: req.user.schoolId })
   if (!subject) return res.status(404).json({ error: 'Subject not found' })
 
-  if (typeof mark !== 'number' || !Number.isFinite(mark) || mark < 0 || mark > inputMaxMark) {
+  if (mark !== null && (typeof mark !== 'number' || !Number.isFinite(mark) || mark < 0 || mark > inputMaxMark)) {
     return res.status(400).json({ error: `mark must be between 0 and ${inputMaxMark}` })
   }
   if (!(await canEditSubject(req, enrollment.classId, enrollment.sectionId, subjectId))) {
@@ -280,9 +280,11 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
   }
   if (exam.hasParts) {
     const target = inputPart === 1 ? result.partOneMarks : result.partTwoMarks
-    target.set(String(subjectId), mark)
+    if (mark === null) target.delete(String(subjectId))
+    else target.set(String(subjectId), mark)
   } else {
-    result.marks.set(String(subjectId), mark)
+    if (mark === null) result.marks.delete(String(subjectId))
+    else result.marks.set(String(subjectId), mark)
   }
   await result.save()
   res.json({ ...result.toObject(), marks: exam.hasParts ? marksObject(inputPart === 1 ? result.partOneMarks : result.partTwoMarks) : marksObject(result.marks) })
