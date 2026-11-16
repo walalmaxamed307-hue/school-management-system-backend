@@ -1,6 +1,6 @@
 const express = require('express')
 const { list, create, remove } = require('../controllers/examController')
-const { getResults, putMark, publish } = require('../controllers/examResultController')
+const { getResults, putMark, publish, unpublish } = require('../controllers/examResultController')
 const { split, getSplit, update } = require('../controllers/roomSplitController')
 const { authenticate, requireRole } = require('../middleware/auth')
 const asyncHandler = require('../middleware/asyncHandler')
@@ -13,6 +13,7 @@ router.delete('/:id', authenticate, requireRole('admin'), asyncHandler(remove))
 
 router.get('/:id/results', authenticate, asyncHandler(getResults))
 router.put('/:id/results', authenticate, asyncHandler(putMark))
+router.post('/:id/unpublish', authenticate, asyncHandler(unpublish))
 router.post('/:id/publish', authenticate, asyncHandler(publish))
 
 router.post('/:id/room-split', authenticate, requireRole('admin'), asyncHandler(split))

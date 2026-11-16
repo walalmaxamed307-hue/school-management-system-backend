@@ -167,6 +167,7 @@ async function getResults(req, res) {
         : {},
       published: result?.published ?? false,
       publishedPart: result?.publishedPart ?? (result?.published ? 2 : null),
+      requiresRepublish: result?.requiresRepublish ?? false,
     }
   })
   const ranked = computeRankings(rows)
@@ -214,6 +215,7 @@ async function getResults(req, res) {
     // micnihiisu yahay final-ka term-ka: Part 2 (iyo isku darka) waa dhammaatay.
     allPublished,
     partOnePublished: exam.hasParts && ranked.length > 0 && ranked.every((r) => r.publishedPart === 1 || r.publishedPart === 2),
+    requiresRepublish: rows.some((r) => r.requiresRepublish),
     canPublish: isCurrentYear && (await canPublish(req, classId, sectionId)),
     rows: responseRows,
   })
@@ -353,6 +355,7 @@ async function publish(req, res) {
         $set: {
           ...(exam.hasParts ? { marks: publishedMarks, maxMarkSnapshot: publishedMaxMark, publishedPart: publishingPart } : {}),
           published: true,
+          requiresRepublish: false,
           publishedAt: new Date(),
           publishedByUserId: req.user.userId,
         },
@@ -364,4 +367,39 @@ async function publish(req, res) {
   res.json({ published: true, count: enrollments.length })
 }
 
-module.exports = { getResults, putMark, publish }
+// Edit ma aha furitaan browser-ka qof keliya ku eg. Horjoogaha fasalka ama
+// admin-ka ayaa natiijada si dhab ah u gelinaya draft, si dhammaan
+// macallimiinta maadooyinkooda loo fasaxay ay u saxaan. Ardaydu wax cusub ma
+// arkaan ilaa isla masuulkaasi uu mar kale Publish/Republish taabto.
+async function unpublish(req, res) {
+  const { classId, sectionId } = req.body
+  if (!classId) return res.status(400).json({ error: 'classId is required' })
+  const sectionCheck = await requireSectionIfNeeded(req.user.schoolId, classId, sectionId)
+  if (sectionCheck) return res.status(sectionCheck.status).json({ error: sectionCheck.error })
+
+  const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.user.schoolId })
+  if (!exam) return res.status(404).json({ error: 'Exam not found' })
+  const activeYear = await getActiveYear(req.user.schoolId)
+  if (String(exam.academicYearId) !== String(activeYear?._id)) {
+    return res.status(400).json({ error: 'This exam is from a past academic year — read-only' })
+  }
+  if (!(await canPublish(req, classId, sectionId))) {
+    return res.status(403).json({ error: 'Only this class/section\'s homeroom teacher or admin can edit published results' })
+  }
+
+  const changed = await StudentExamResult.updateMany(
+    {
+      schoolId: req.user.schoolId,
+      examId: exam._id,
+      classId,
+      sectionId: sectionId || undefined,
+    },
+    {
+      $set: { published: false, requiresRepublish: true },
+      $unset: { publishedPart: 1, publishedAt: 1, publishedByUserId: 1 },
+    }
+  )
+  res.json({ editing: true, count: changed.modifiedCount })
+}
+
+module.exports = { getResults, putMark, publish, unpublish }

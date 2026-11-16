@@ -23,6 +23,9 @@ const studentExamResultSchema = new mongoose.Schema(
     partTwoMarks: { type: Map, of: Number, default: {} },
     maxMarkSnapshot: { type: Number, required: true },
     published: { type: Boolean, default: false },
+    // Edit wuxuu natiijada geliyaa draft ilaa horjooge/admin si ula kac ah
+    // u taabto Republish; markaas ayay ardaydu mar kale arkaan.
+    requiresRepublish: { type: Boolean, default: false },
     // Split exam: 1 = Part 1 ayaa la publish-gareeyay, 2 = Part 1 + Part 2
     // ayaa la isku daray oo la publish-gareeyay. Exam caadi ah wuxuu sii
     // isticmaalaa `published` oo keliya (publishedPart=null).
