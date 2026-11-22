@@ -16,11 +16,16 @@ const studentExamResultSchema = new mongoose.Schema(
     classId: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
     sectionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Section' },
     marks: { type: Map, of: Number, default: {} }, // subjectId (string) -> mark
+    // Version gaar ah oo subject kasta leh. Waxay ka hortagtaa request
+    // duug ah inuu daboolo dhibic cusub marka internet-ku kala hormariyo.
+    markVersions: { type: Map, of: Number, default: {} },
     // Waxaa loo isticmaalaa keliya exam.hasParts=true. `marks` wuxuu sii
     // ahaanayaa natiijada kama-dambaysta ah (Part 1 + Part 2), si reports,
     // risk iyo promotion-kii hore aysan u jabin.
     partOneMarks: { type: Map, of: Number, default: {} },
     partTwoMarks: { type: Map, of: Number, default: {} },
+    partOneMarkVersions: { type: Map, of: Number, default: {} },
+    partTwoMarkVersions: { type: Map, of: Number, default: {} },
     maxMarkSnapshot: { type: Number, required: true },
     published: { type: Boolean, default: false },
     // Edit wuxuu natiijada geliyaa draft ilaa horjooge/admin si ula kac ah

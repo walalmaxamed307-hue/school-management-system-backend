@@ -297,6 +297,24 @@ describe('StudentExamResult', () => {
     expect(err.errors.classId).toBeDefined()
     expect(err.errors.maxMarkSnapshot).toBeDefined()
   })
+
+  test('tracks a per-subject version with the exact saved mark', () => {
+    const subjectId = String(oid())
+    const result = new StudentExamResult({
+      schoolId: oid(),
+      academicYearId: oid(),
+      enrollmentId: oid(),
+      examId: oid(),
+      classId: oid(),
+      maxMarkSnapshot: 100,
+      marks: { [subjectId]: 29 },
+      markVersions: { [subjectId]: 1 },
+    })
+
+    expect(result.validateSync()).toBeUndefined()
+    expect(result.marks.get(subjectId)).toBe(29)
+    expect(result.markVersions.get(subjectId)).toBe(1)
+  })
 })
 
 describe('Room / RoomAssignment', () => {

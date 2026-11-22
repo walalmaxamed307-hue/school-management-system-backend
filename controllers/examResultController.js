@@ -165,6 +165,11 @@ async function getResults(req, res) {
       marks: result
         ? (exam.hasParts ? marksObject(inputPart === 1 ? result.partOneMarks : result.partTwoMarks) : marksObject(result.marks))
         : {},
+      markVersions: result
+        ? (exam.hasParts
+            ? marksObject(inputPart === 1 ? result.partOneMarkVersions : result.partTwoMarkVersions)
+            : marksObject(result.markVersions))
+        : {},
       published: result?.published ?? false,
       publishedPart: result?.publishedPart ?? (result?.published ? 2 : null),
       requiresRepublish: result?.requiresRepublish ?? false,
@@ -222,7 +227,7 @@ async function getResults(req, res) {
 }
 
 async function putMark(req, res) {
-  const { enrollmentId, subjectId, mark, part } = req.body
+  const { enrollmentId, subjectId, mark, part, expectedVersion } = req.body
   if (!enrollmentId || !subjectId || mark === undefined) {
     return res.status(400).json({ error: 'enrollmentId, subjectId, and mark are required' })
   }
@@ -255,22 +260,46 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
   if (mark !== null && (typeof mark !== 'number' || !Number.isFinite(mark) || mark < 0 || mark > inputMaxMark)) {
     return res.status(400).json({ error: `mark must be between 0 and ${inputMaxMark}` })
   }
+  if (!Number.isInteger(expectedVersion) || expectedVersion < 0) {
+    return res.status(400).json({ error: 'Boggan Results-ka waa duug. Dib u cusboonaysii bogga ka hor intaadan dhibco kaydin.' })
+  }
   if (!(await canEditSubject(req, enrollment.classId, enrollment.sectionId, subjectId))) {
     return res.status(403).json({ error: 'You are not assigned to teach this subject for this class/section' })
   }
 
-  let result = await StudentExamResult.findOne({ schoolId: req.user.schoolId, examId: exam._id, enrollmentId })
+  const resultFilter = {
+    schoolId: req.user.schoolId,
+    academicYearId: exam.academicYearId,
+    examId: exam._id,
+    enrollmentId,
+  }
+  const existing = await StudentExamResult.findOne(resultFilter)
 
   // Isla "unlocked" xeerka frontend-ku lahaa: marka natiijadu horeyba
   // published tahay, kaliya qofka canPublish ah (admin/homeroom) ayaa
   // dib u wax ka beddeli kara — macalinka subject-ka gaarka ah kuma
   // celcelin karo natiijo horeyba la publish gareeyay.
-  if (result?.published && !(await canPublish(req, enrollment.classId, enrollment.sectionId))) {
+  const canOverridePublished = await canPublish(req, enrollment.classId, enrollment.sectionId)
+  if (existing?.published && !canOverridePublished) {
     return res.status(403).json({ error: 'This result is already published — only the homeroom teacher or admin can edit it now' })
   }
 
-  if (!result) {
-    result = new StudentExamResult({
+  const markPath = exam.hasParts
+    ? `${inputPart === 1 ? 'partOneMarks' : 'partTwoMarks'}.${subjectId}`
+    : `marks.${subjectId}`
+  const versionPath = exam.hasParts
+    ? `${inputPart === 1 ? 'partOneMarkVersions' : 'partTwoMarkVersions'}.${subjectId}`
+    : `markVersions.${subjectId}`
+  const versionMatch = expectedVersion === 0
+    ? { $or: [{ [versionPath]: { $exists: false } }, { [versionPath]: 0 }] }
+    : { [versionPath]: expectedVersion }
+  const writeFilter = {
+    ...resultFilter,
+    ...versionMatch,
+    ...(!canOverridePublished ? { published: { $ne: true } } : {}),
+  }
+  const update = {
+    $setOnInsert: {
       schoolId: req.user.schoolId,
       academicYearId: exam.academicYearId,
       enrollmentId,
@@ -278,18 +307,39 @@ if (['transferred', 'withdrawn'].includes(enrollment.status)) {
       classId: enrollment.classId,
       sectionId: enrollment.sectionId,
       maxMarkSnapshot: exam.examMaxMarkSnapshot,
+    },
+    $inc: { [versionPath]: 1 },
+    ...(mark === null ? { $unset: { [markPath]: 1 } } : { $set: { [markPath]: mark } }),
+  }
+
+  let result
+  try {
+    result = await StudentExamResult.findOneAndUpdate(writeFilter, update, {
+      new: true,
+      upsert: expectedVersion === 0,
+      runValidators: true,
+      // Map-ka marks/version waxaa abuura dotted atomic update-ka hoose.
+      // Default map oo $setOnInsert lagu daraa wuxuu MongoDB kula
+      // dagaallami karaa isla map-kan marka arday cusub markii ugu horraysay
+      // dhibco loo gelinayo.
+      setDefaultsOnInsert: false,
     })
+  } catch (err) {
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: 'Dhibcahan waxaa isla waqtigan beddelay request kale. Dib u eeg qiimaha kaydsan ka hor intaadan mar kale qorin.' })
+    }
+    throw err
   }
-  if (exam.hasParts) {
-    const target = inputPart === 1 ? result.partOneMarks : result.partTwoMarks
-    if (mark === null) target.delete(String(subjectId))
-    else target.set(String(subjectId), mark)
-  } else {
-    if (mark === null) result.marks.delete(String(subjectId))
-    else result.marks.set(String(subjectId), mark)
+  if (!result) {
+    return res.status(409).json({ error: 'Dhibcahan ayaa isbeddelay intaad qoraysay. System-ku ma daboolin qiimaha cusub; dib u eeg kadibna mar kale kaydi.' })
   }
-  await result.save()
-  res.json({ ...result.toObject(), marks: exam.hasParts ? marksObject(inputPart === 1 ? result.partOneMarks : result.partTwoMarks) : marksObject(result.marks) })
+  const versions = exam.hasParts
+    ? (inputPart === 1 ? result.partOneMarkVersions : result.partTwoMarkVersions)
+    : result.markVersions
+  res.json({
+    marks: exam.hasParts ? marksObject(inputPart === 1 ? result.partOneMarks : result.partTwoMarks) : marksObject(result.marks),
+    markVersion: Number(versions.get(String(subjectId)) ?? 0),
+  })
 }
 
 // Isla "publishClass" ee frontend-ku lahaa: dhammaan ardayda la doortay
